@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>方舟幹員資料終端</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230e1216'/%3E%3Crect x='3' y='6' width='4' height='4' fill='%23d7b46a'/%3E%3Crect x='8' y='6' width='3' height='3' fill='%23667a8a'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/" aria-label="回到首頁">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">
+        <strong>方舟幹員資料終端</strong>
+        <small>同機制 · 同範圍</small>
+      </span>
+    </a>
+    <div class="search-wrap">
+      <label class="sr-only" for="search">搜尋幹員或分支</label>
+      <input id="search" type="search" placeholder="搜尋幹員、分支、英文名…" autocomplete="off" />
+      <kbd class="search-hint">/</kbd>
+      <div id="search-panel" class="search-panel" hidden></div>
+    </div>
+  </header>
+
+  <main id="app">
+    <p class="boot">讀取幹員資料中…</p>
+  </main>
+
+  <footer class="foot">
+    家族表是同條件對照；點進檔案後可改精英化、等級、潛能、信賴與技能。模組尚未計算。資料來自遊戲拆包。
+  </footer>
+
+  <script src="js/app.js" type="module"></script>
+</body>
+</html>

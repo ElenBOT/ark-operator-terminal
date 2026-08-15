@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+data/raw/*
+!data/raw/term_table.json
+!data/raw/.gitkeep
