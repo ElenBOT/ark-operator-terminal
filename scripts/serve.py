@@ -42,9 +42,14 @@ def main() -> int:
     ensure_data()
     os.chdir(WEB)
     port = pick_port(START_PORT)
-    handler = http.server.SimpleHTTPRequestHandler
+
+    class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
+    with socketserver.TCPServer(("127.0.0.1", port), NoCacheHandler) as httpd:
         url = f"http://127.0.0.1:{port}/"
         print(f"方舟幹員資料終端 running at {url}")
         print("Press Ctrl+C to stop.")

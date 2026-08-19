@@ -516,6 +516,15 @@ def build() -> dict[str, Any]:
                 }
             )
         packed.sort(key=lambda g: (-g["count"], g["rangeId"]))
+        seen_ids: set[str] = set()
+        for g in packed:
+            base = g["id"]
+            if base in seen_ids:
+                n = 2
+                while f"{base}__x{n}" in seen_ids:
+                    n += 1
+                g["id"] = f"{base}__x{n}"
+            seen_ids.add(g["id"])
         if packed:
             packed[0]["primary"] = True
         for extra in packed[1:]:
@@ -523,7 +532,7 @@ def build() -> dict[str, Any]:
             names = "、".join(operators[i]["name"] for i in extra["operatorIds"][:3])
             extra["label"] = f"特例 · {names}"
         if packed:
-            packed[0]["label"] = "常見底盤" if len(packed) > 1 else "底盤"
+            packed[0]["label"] = "常見幹員" if len(packed) > 1 else "底盤"
         branch["groups"] = packed
         branch["count"] = sum(g["count"] for g in packed)
         families.append(branch)

@@ -296,7 +296,7 @@ function renderFamily(route) {
   });
 
   const extrema = {};
-  for (const key of ["cost", "hp", "atk", "def", "res", "dps", "redeploy"]) {
+  for (const key of ["cost", "hp", "atk", "def", "interval", "dps", "redeploy"]) {
     const vals = rows.map((r) => r.stats[key]);
     extrema[key] = { max: Math.max(...vals), min: Math.min(...vals) };
   }
@@ -311,7 +311,7 @@ function renderFamily(route) {
     ["hp", "生命"],
     ["atk", "攻擊"],
     ["def", "防禦"],
-    ["res", "法抗"],
+    ["interval", "攻擊間隔(s)"],
     ["dps", "DPS"],
     ["redeploy", "再部署(s)"],
   ];
@@ -351,7 +351,7 @@ function renderFamily(route) {
     nameTd.appendChild(opBtn);
     tr.appendChild(nameTd);
     tr.appendChild(tdPlain(`<span class="stars">${stars(row.op.rarity)}</span>`));
-    for (const key of ["cost", "hp", "atk", "def", "res", "dps", "redeploy"]) {
+    for (const key of ["cost", "hp", "atk", "def", "interval", "dps", "redeploy"]) {
       tr.appendChild(tdNum(row.stats[key], extrema[key], rows.length > 1));
     }
     tbody.appendChild(tr);

@@ -143,6 +143,14 @@ export function renderOperator(app, data, op, detail, handlers) {
   back.textContent = "← 返回";
   back.addEventListener("click", handlers.onBack);
   const face = imgEl(op.id, "file-avatar");
+  const wiki = document.createElement("a");
+  wiki.className = "file-avatar-link";
+  wiki.href = prtsWikiUrl(op);
+  wiki.target = "_blank";
+  wiki.rel = "noopener noreferrer";
+  wiki.title = `在 PRTS Wiki 開啟「${op.name}」`;
+  wiki.setAttribute("aria-label", `在 PRTS Wiki 開啟「${op.name}」`);
+  wiki.appendChild(face);
   const meta = document.createElement("div");
   meta.className = "file-meta";
   const h = document.createElement("h1");
@@ -168,7 +176,7 @@ export function renderOperator(app, data, op, detail, handlers) {
   };
   sub.append(aka, dot(), prof, dot(), branchName, dot(), starEl);
   meta.append(h, sub);
-  head.append(back, face, meta);
+  head.append(back, wiki, meta);
 
   const body = document.createElement("div");
   body.className = "file-body";
@@ -682,6 +690,11 @@ function formatDuration(d) {
   if (d < 0) return "無限";
   if (d === 0) return "";
   return Number.isInteger(d) ? `${d}s` : `${d}s`;
+}
+
+function prtsWikiUrl(op) {
+  const title = op.nameCn || op.name || op.id;
+  return `https://prts.wiki/w/${encodeURIComponent(title)}`;
 }
 
 function esc(text) {

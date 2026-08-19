@@ -54,12 +54,14 @@ a { color: inherit; }
 }
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; flex-shrink: 0; }
 .brand-mark {
-  width: 28px; height: 28px;
-  background:
-    linear-gradient(var(--gold), var(--gold)) 4px 10px / 10px 10px no-repeat,
-    linear-gradient(#4b6070, #4b6070) 16px 10px / 8px 8px no-repeat,
-    #1a222a;
-  border: 1px solid var(--line-strong);
+  --cell: 11px;
+  --accent: var(--gold);
+  display: grid;
+  grid-template-columns: var(--cell) var(--cell);
+  gap: 3px;
+  padding: 4px;
+  background: #05080c;
+  border: 1px solid #1c252d;
 }
 .brand-text { display: flex; flex-direction: column; }
 .brand-text strong { font-size: 16px; letter-spacing: 0.04em; font-weight: 700; }
@@ -362,13 +364,27 @@ body.is-detail #app {
   margin: 0;
   justify-self: start;
 }
-.file-avatar {
+.file-avatar-link {
   grid-column: 1;
+  display: block;
+  width: 72px;
+  height: 72px;
+  line-height: 0;
+  text-decoration: none;
+  outline: none;
+}
+.file-avatar {
+  display: block;
   width: 72px;
   height: 72px;
   object-fit: cover;
   background: #0e1419;
   border: 1px solid var(--line);
+  transition: border-color 0.15s ease;
+}
+.file-avatar-link:hover .file-avatar,
+.file-avatar-link:focus-visible .file-avatar {
+  border-color: var(--gold);
 }
 .file-meta {
   grid-column: 2;
