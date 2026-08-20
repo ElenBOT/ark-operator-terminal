@@ -589,6 +589,7 @@ body.is-detail #app {
 }
 .lv-btn.on { border-color: var(--gold-dim); color: var(--ink); background: #241e14; }
 .lv-btn.master.on { border-color: #c9a24a; color: var(--gold); }
+.lv-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .skill-body { min-height: 0; overflow: auto; }
 .skill-head { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
 .skill-name { font-size: 15px; font-weight: 700; }

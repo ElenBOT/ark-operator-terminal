@@ -393,6 +393,24 @@ function showOperator(id) {
     },
     onSkill: (i) => {
       detail.skillIndex = i;
+      // masteryIndex tracks the last real skill tab visited — it does NOT
+      // reset when switching to 普攻, so the mastery row keeps a valid target
+      // and stays editable even while viewing 普攻.
+      if (i >= 0) detail.masteryIndex = i;
+      syncDetail(app, state.data, op, detail);
+    },
+    onSkillLevelShared: (n) => {
+      detail.skillLevelShared = n;
+      // Picking a plain level clears the targeted skill's own mastery —
+      // mastery is a separate per-skill axis, but the highlight always shows
+      // mastery over the shared level when mastery > 0, so this keeps the
+      // button you just clicked visibly reflect the change.
+      if (detail.masteryIndex >= 0) detail.mastery[detail.masteryIndex] = 0;
+      syncDetail(app, state.data, op, detail);
+    },
+    onMastery: (n) => {
+      if (detail.masteryIndex < 0) return;
+      detail.mastery[detail.masteryIndex] = n;
       syncDetail(app, state.data, op, detail);
     },
     onPreviewBase: () => {

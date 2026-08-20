@@ -53,6 +53,10 @@ export function createDetailState(op) {
     // field that leaked across skill tabs — kept separate here on purpose.
     skillLevelShared,
     mastery,
+    // Which skill the mastery buttons target — kept in sync with skillIndex
+    // while viewing a real skill, but (unlike skillIndex) NOT reset when the
+    // 普攻 tab is opened, so the mastery row stays live-editable from there too.
+    masteryIndex: (op.skillRefs || []).length ? 0 : BASIC_SKILL,
     // Which of matPlan.current/target the elite/level/skill controls are currently
     // live-editing (null = neither — plain preview, doesn't touch either plan).
     editing: null,
@@ -439,9 +443,9 @@ function skillDisplay(snap) {
 }
 
 function planSummaryText(current, target) {
-  const c = `精${current.elite}／Lv${current.level}／${skillDisplay(current)}`;
-  const t = `精${target.elite}／Lv${target.level}／${skillDisplay(target)}`;
-  return `${c} → ${t}`;
+  const c = `精${current.elite}／Lv${current.level}`;
+  const t = `精${target.elite}／Lv${target.level}`;
+  return `${c} → ${t}　技能：${skillDisplay(current)} → ${skillDisplay(target)}`;
 }
 
 function syncMaterialsDock(root, data, op, detail) {
@@ -890,9 +894,33 @@ function skillBlock(data, op, detail, handlers) {
     btn.addEventListener("click", () => handlers.onSkill(i));
     tabs.appendChild(btn);
   });
+  // One row, 1-7 then 專I-III (10 buttons — same shape as before). Level 1-7 is
+  // shared across every skill (real game mechanic) so those buttons stay
+  // visible/editable no matter which tab — including 普攻 — is open; mastery
+  // is independent per skill, so the 3 mastery buttons are hidden while a
+  // skill without mastery (普攻, or a skill with no master ranks) is shown.
   const levels = document.createElement("div");
   levels.className = "skill-levels";
   levels.dataset.slot = "skill-levels";
+  for (let i = 1; i <= 7; i += 1) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lv-btn";
+    btn.dataset.sharedLv = String(i);
+    btn.textContent = String(i);
+    btn.addEventListener("click", () => handlers.onSkillLevelShared(i));
+    levels.appendChild(btn);
+  }
+  ["Ⅰ", "Ⅱ", "Ⅲ"].forEach((label, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lv-btn master";
+    btn.dataset.mastery = String(i + 1);
+    btn.textContent = `專${label}`;
+    btn.addEventListener("click", () => handlers.onMastery(i + 1));
+    levels.appendChild(btn);
+  });
+
   const body = document.createElement("div");
   body.className = "skill-body";
   body.dataset.slot = "skill-body";
@@ -905,12 +933,29 @@ function syncSkillPanel(root, data, op, detail) {
   root.querySelectorAll("[data-skill]").forEach((btn) => {
     btn.classList.toggle("on", Number(btn.dataset.skill) === detail.skillIndex);
   });
-  const lvSlot = root.querySelector("[data-slot=skill-levels]");
+  const levels = root.querySelector('[data-slot="skill-levels"]');
   const body = root.querySelector("[data-slot=skill-body]");
-  if (!lvSlot || !body) return;
+  if (!levels || !body) return;
+  const masteryBtns = levels.querySelectorAll("[data-mastery]");
+
+  // The mastery row always targets masteryIndex — the last real skill tab
+  // visited — not skillIndex, so it stays live-editable even while viewing
+  // 普攻 (users don't want to leave 普攻 just to bump a skill's mastery, and
+  // they can see exactly which skill's mastery the row reflects by which S
+  // tab is highlighted above).
+  const mRef = detail.masteryIndex >= 0 ? refs[detail.masteryIndex] : null;
+  const mSkill = mRef ? data.skills[mRef.id] : null;
+  const hasMastery = !!(mSkill && mSkill.levels.length > 7);
+  const mastery = hasMastery ? detail.mastery[detail.masteryIndex] || 0 : 0;
+  levels.querySelectorAll("[data-shared-lv]").forEach((btn) => {
+    btn.classList.toggle("on", mastery === 0 && Number(btn.dataset.sharedLv) === detail.skillLevelShared);
+  });
+  masteryBtns.forEach((btn) => {
+    btn.disabled = !hasMastery;
+    btn.classList.toggle("on", hasMastery && Number(btn.dataset.mastery) === mastery);
+  });
+
   if (detail.skillIndex === BASIC_SKILL) {
-    lvSlot.replaceChildren();
-    delete lvSlot.dataset.skill;
     const entry = activeTrait(op, detail.elite, detail.potential);
     const desc = entry
       ? formatSkillDesc(entry.desc, entry.blackboard || {}, data.terms)
@@ -929,7 +974,6 @@ function syncSkillPanel(root, data, op, detail) {
     return;
   }
   if (!refs.length) {
-    lvSlot.replaceChildren();
     body.innerHTML = `<p class="muted">這名幹員沒有技能。</p>`;
     return;
   }
@@ -940,42 +984,9 @@ function syncSkillPanel(root, data, op, detail) {
     return;
   }
   const maxLv = skill.levels.length;
-  const mastery = detail.mastery[detail.skillIndex] || 0;
+  // masteryIndex tracks detail.skillIndex whenever a real skill tab is open
+  // (see onSkill), so `mastery` above already reflects this skill's own rank.
   const idx = mastery > 0 ? clamp(6 + mastery, 0, maxLv - 1) : clamp(detail.skillLevelShared - 1, 0, maxLv - 1);
-  if (lvSlot.childElementCount !== maxLv || lvSlot.dataset.skill !== ref.id) {
-    lvSlot.replaceChildren();
-    lvSlot.dataset.skill = ref.id;
-    for (let i = 0; i < maxLv; i += 1) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "lv-btn" + (i >= 7 ? " master" : "");
-      btn.dataset.lv = String(i);
-      btn.textContent = i < 7 ? String(i + 1) : `專${["Ⅰ", "Ⅱ", "Ⅲ"][i - 7]}`;
-      btn.addEventListener("click", () => {
-        // Buttons 0-6 set the shared skill level (all skills); 7-9 set this
-        // skill's own mastery rank — the two axes are independent in-game.
-        // Picking a plain level also clears this skill's own mastery: the
-        // highlight logic below always prefers mastery over the shared level
-        // when mastery > 0 (a mastered skill's "real" level IS its mastery),
-        // so without this a Lv 1-7 click would silently do nothing visible
-        // whenever mastery was already set — which it is by default (every
-        // skill starts at mastery 3, see createDetailState) — making the
-        // level buttons look completely unresponsive until mastery was
-        // explicitly zeroed out some other way.
-        if (i < 7) {
-          detail.skillLevelShared = i + 1;
-          detail.mastery[detail.skillIndex] = 0;
-        } else {
-          detail.mastery[detail.skillIndex] = i - 6;
-        }
-        syncDetail(root, data, op, detail);
-      });
-      lvSlot.appendChild(btn);
-    }
-  }
-  lvSlot.querySelectorAll(".lv-btn").forEach((btn) => {
-    btn.classList.toggle("on", Number(btn.dataset.lv) === idx);
-  });
 
   const lv = skill.levels[idx];
   const needElite = ref.unlockElite || 0;
