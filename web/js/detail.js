@@ -60,6 +60,8 @@ export function createDetailState(op) {
     matPlan: { current: maxSnapshot(), target: maxSnapshot() },
     selectedMaterial: null,
     showingPlan: false,
+    // Material ids currently decomposed into their craft ingredients in the list.
+    expandedMaterials: new Set(),
   };
 }
 
@@ -453,7 +455,7 @@ function syncMaterialsDock(root, data, op, detail) {
   }
   if (detail.selectedMaterial && !(detail.selectedMaterial in counts)) detail.selectedMaterial = null;
   ids.sort((a, b) => (data.materials[b]?.rarity || 0) - (data.materials[a]?.rarity || 0));
-  for (const id of ids) list.appendChild(materialChip(root, data, detail, id, counts[id]));
+  for (const id of ids) list.appendChild(materialNode(root, data, op, detail, id, counts[id]));
   if (detail.showingPlan) {
     renderFarmPlan(root, data, counts);
   } else {
@@ -466,13 +468,41 @@ function formatCount(n) {
   return String(n);
 }
 
-function materialChip(root, data, detail, id, count) {
+function ensureDockExpanded(root) {
+  const dock = root.querySelector('[data-slot="mat-dock"]');
+  if (dock && !dock.classList.contains("expanded")) {
+    dock.classList.add("expanded");
+    const handle = dock.querySelector(".mat-dock-handle");
+    if (handle) handle.textContent = "›";
+  }
+}
+
+function selectMaterial(root, data, op, detail, id) {
+  detail.selectedMaterial = detail.selectedMaterial === id ? null : id;
+  detail.showingPlan = false;
+  if (detail.selectedMaterial) ensureDockExpanded(root);
+  // The stage/craft table needs real width to read, so full re-sync (not just
+  // toggling a class) — this also refreshes the shared detail panel below.
+  syncMaterialsDock(root, data, op, detail);
+}
+
+// One list row per needed material, with an optional "+"/"−" next to it that
+// decomposes it into its own craft ingredients (recursively) so the user can
+// see how the raw materials at the bottom of the chain are actually farmed,
+// without leaving the list to open a separate popover for every step.
+function materialNode(root, data, op, detail, id, count) {
   const info = data.materials[id];
-  const wrap = document.createElement("div");
-  wrap.className = "mat-chip-wrap";
+  const canSplit = !!info?.craft;
+  const expanded = canSplit && detail.expandedMaterials.has(id);
+
+  const node = document.createElement("div");
+  node.className = "mat-node" + (expanded ? " expanded" : "");
+
+  const row = document.createElement("div");
+  row.className = "mat-chip-wrap";
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "mat-chip" + (detail.selectedMaterial === id ? " open" : "");
+  btn.className = "mat-chip" + (detail.selectedMaterial === id ? " open" : "") + (expanded ? " dimmed" : "");
   btn.title = `${info?.name || id} ×${count}`;
   btn.appendChild(matIconEl(info?.iconId || id));
   const label = document.createElement("span");
@@ -482,23 +512,35 @@ function materialChip(root, data, detail, id, count) {
   n.className = "mat-chip-count";
   n.textContent = `×${formatCount(count)}`;
   btn.append(label, n);
-  btn.addEventListener("click", () => {
-    detail.selectedMaterial = detail.selectedMaterial === id ? null : id;
-    detail.showingPlan = false;
-    root.querySelectorAll(".mat-chip.open").forEach((el) => el.classList.remove("open"));
-    if (detail.selectedMaterial) btn.classList.add("open");
-    renderMaterialDetail(root, data, detail.selectedMaterial);
-    // The stage/craft table needs real width to read — force the dock open
-    // if the user clicked a chip while it was still collapsed.
-    const dock = root.querySelector('[data-slot="mat-dock"]');
-    if (detail.selectedMaterial && dock && !dock.classList.contains("expanded")) {
-      dock.classList.add("expanded");
-      const handle = dock.querySelector(".mat-dock-handle");
-      if (handle) handle.textContent = "›";
+  btn.addEventListener("click", () => selectMaterial(root, data, op, detail, id));
+  row.appendChild(btn);
+
+  if (canSplit) {
+    const splitBtn = document.createElement("button");
+    splitBtn.type = "button";
+    splitBtn.className = "mat-split-btn";
+    splitBtn.textContent = expanded ? "−" : "+";
+    splitBtn.title = expanded ? "收合成基礎材料" : "拆成下一階合成材料，看它們怎麼刷";
+    splitBtn.addEventListener("click", () => {
+      if (expanded) detail.expandedMaterials.delete(id);
+      else detail.expandedMaterials.add(id);
+      ensureDockExpanded(root);
+      syncMaterialsDock(root, data, op, detail);
+    });
+    row.appendChild(splitBtn);
+  }
+  node.appendChild(row);
+
+  if (expanded) {
+    const times = Math.ceil(count / (info.craft.count || 1));
+    const children = document.createElement("div");
+    children.className = "mat-node-children";
+    for (const c of info.craft.costs || []) {
+      children.appendChild(materialNode(root, data, op, detail, c.id, c.count * times));
     }
-  });
-  wrap.append(btn);
-  return wrap;
+    node.appendChild(children);
+  }
+  return node;
 }
 
 function renderMaterialDetail(root, data, id) {

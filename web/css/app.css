@@ -778,9 +778,10 @@ body.is-detail #app { padding-right: 84px; }
   padding: 0 10px 10px;
 }
 .mat-empty { font-size: 12px; padding: 8px 2px; line-height: 1.5; }
-.mat-chip-wrap { display: flex; flex-direction: column; min-width: 0; }
-.mat-dock.expanded .mat-chip-wrap { width: calc(50% - 6px); }
-.mat-dock.expanded .mat-chip-wrap.open { width: 100%; }
+.mat-node { display: flex; flex-direction: column; min-width: 0; }
+.mat-dock.expanded .mat-node { width: calc(50% - 6px); }
+.mat-dock.expanded .mat-node.expanded { width: 100%; }
+.mat-chip-wrap { display: flex; align-items: stretch; gap: 4px; min-width: 0; }
 .mat-chip {
   display: flex;
   align-items: center;
@@ -800,6 +801,28 @@ body.is-detail #app { padding-right: 84px; }
   padding: 5px 2px;
 }
 .mat-chip:hover, .mat-chip.open { border-color: var(--gold-dim); }
+.mat-chip.dimmed { opacity: 0.55; }
+.mat-split-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.mat-split-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+.mat-node-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 2px 14px;
+  padding: 6px;
+  border: 1px dashed var(--line-strong);
+}
+.mat-dock:not(.expanded) .mat-split-btn,
+.mat-dock:not(.expanded) .mat-node-children { display: none; }
 .mat-icon { width: 26px; height: 26px; object-fit: contain; background: #0e1419; flex: 0 0 auto; }
 .mat-chip-label {
   flex: 1 1 auto;
@@ -937,5 +960,5 @@ tr[data-stage] { cursor: help; }
   .mat-dock:not(.expanded) .mat-dock-head { flex-direction: column; justify-content: center; border-bottom: 0; border-right: 1px solid var(--line); }
   .mat-dock:not(.expanded) .mat-dock-list { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
   .mat-dock.expanded .mat-dock-list { flex: 1 1 40%; flex-wrap: wrap; overflow-y: auto; }
-  .mat-dock:not(.expanded) .mat-chip-wrap { flex: 0 0 auto; }
+  .mat-dock:not(.expanded) .mat-node { flex: 0 0 auto; }
 }
