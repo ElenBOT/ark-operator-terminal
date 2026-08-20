@@ -1,6 +1,8 @@
 import { createDetailState, renderOperator, syncDetail } from "./detail.js";
 import {
   PROF_ORDER,
+  applyTrust,
+  baseStatsAt,
   branchOf,
   imgEl,
   profIconEl,
@@ -8,6 +10,7 @@ import {
   renderRange,
   setAccent,
   stars,
+  withDps,
 } from "./shared.js";
 
 const state = {
@@ -46,28 +49,11 @@ function go(hash) {
   location.hash = hash;
 }
 
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
 function statsOf(op, elite, levelMode, trust) {
-  const phases = op.phases;
-  const phase = phases[Math.min(elite, phases.length - 1)];
-  const maxLv = phase.maxLevel;
-  const lv = levelMode === "max" ? maxLv : 1;
-  const t = maxLv <= 1 ? 1 : (lv - 1) / (maxLv - 1);
-  const out = {};
-  for (const key of Object.keys(phase.min)) {
-    const raw = lerp(phase.min[key], phase.max[key], t);
-    out[key] = key === "interval" || key === "res" ? Math.round(raw * 100) / 100 : Math.round(raw);
-  }
-  if (trust && op.trust) {
-    out.hp += op.trust.hp || 0;
-    out.atk += op.trust.atk || 0;
-    out.def += op.trust.def || 0;
-    out.res += op.trust.res || 0;
-  }
-  out.dps = out.interval ? Math.round((out.atk / out.interval) * 10) / 10 : 0;
+  const phase = op.phases[Math.min(elite, op.phases.length - 1)];
+  const level = levelMode === "max" ? phase.maxLevel : 1;
+  const out = applyTrust(baseStatsAt(phase, level), op.trust, trust ? 1 : 0);
+  withDps(out);
   out.usedElite = phase.elite;
   return out;
 }

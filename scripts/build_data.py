@@ -21,9 +21,11 @@ SOURCES = {
     "range_table.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/range_table.json",
     "uniequip_table.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/uniequip_table.json",
     "skill_table.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/skill_table.json",
+    "gamedata_const.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/gamedata_const.json",
     "character_table_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/character_table.json",
     "uniequip_table_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/uniequip_table.json",
     "skill_table_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/skill_table.json",
+    "gamedata_const_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/gamedata_const.json",
 }
 
 PROFESSIONS = [

@@ -1,7 +1,9 @@
 import {
   RANGE_FRAME,
+  applyTrust,
   atkIconEl,
   atkIconHtml,
+  baseStatsAt,
   branchOf,
   imgEl,
   profIconEl,
@@ -10,6 +12,7 @@ import {
   renderRange,
   setAccent,
   stars,
+  withDps,
 } from "./shared.js";
 
 const SKILL_TYPE = { MANUAL: "手動觸發", AUTO: "自動觸發", PASSIVE: "被動" };
@@ -43,35 +46,23 @@ export function createDetailState(op) {
 export function computeStats(op, detail) {
   const elite = Math.min(detail.elite, op.phases.length - 1);
   const phase = op.phases[elite];
-  const maxLv = phase.maxLevel;
-  const level = clamp(detail.levelByElite[elite] ?? maxLv, 1, maxLv);
-  const t = maxLv <= 1 ? 1 : (level - 1) / (maxLv - 1);
-  const out = {};
-  for (const key of Object.keys(phase.min)) {
-    const raw = phase.min[key] + (phase.max[key] - phase.min[key]) * t;
-    out[key] = key === "interval" || key === "res" ? Math.round(raw * 100) / 100 : Math.round(raw);
-  }
+  const level = clamp(detail.levelByElite[elite] ?? phase.maxLevel, 1, phase.maxLevel);
+  const out = baseStatsAt(phase, level);
   const trustRatio = clamp(detail.trust, 0, 200) / 200;
-  if (op.trust && trustRatio) {
-    out.hp += Math.round((op.trust.hp || 0) * trustRatio);
-    out.atk += Math.round((op.trust.atk || 0) * trustRatio);
-    out.def += Math.round((op.trust.def || 0) * trustRatio);
-    out.res += Math.round(((op.trust.res || 0) * trustRatio) * 100) / 100;
-  }
+  applyTrust(out, op.trust, trustRatio);
   const potRank = clamp(detail.potential, 1, op.maxPotential || 1) - 1;
   for (let i = 0; i < potRank; i += 1) {
     const bonus = (op.potentials || [])[i];
     if (!bonus) continue;
     for (const [k, v] of Object.entries(bonus.stats || {})) {
-      if (k in out) out[k] += v;
-      else out[k] = v;
+      out[k] = (out[k] ?? 0) + v;
     }
   }
   if ("cost" in out) out.cost = Math.max(0, Math.round(out.cost));
   if ("redeploy" in out) out.redeploy = Math.max(0, Math.round(out.redeploy));
   if ("block" in out) out.block = Math.round(out.block);
   if ("aspd" in out) out.aspd = Math.round(out.aspd);
-  out.dps = out.interval ? Math.round((out.atk / out.interval) * 10) / 10 : 0;
+  withDps(out);
   out.level = level;
   out.elite = elite;
   return out;

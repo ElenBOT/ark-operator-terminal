@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 setlocal EnableExtensions
 cd /d "%~dp0."
 
@@ -17,20 +18,20 @@ if not defined PY if exist "%LocalAppData%\Programs\Python\Python312\python.exe"
 if not defined PY if exist "%LocalAppData%\Programs\Python\Python311\python.exe" set "PY=%LocalAppData%\Programs\Python\Python311\python.exe"
 
 if not defined PY (
-  echo Python was not found.
-  echo Install Python 3, or Miniconda, then try again.
+  echo 找不到 Python。
+  echo 請安裝 Python 3 或 Miniconda 後再試一次。
   echo.
   pause
   exit /b 1
 )
 
-echo Starting Ark server with:
+echo 正在啟動方舟本機伺服器，使用：
 echo   %PY%
 echo.
 "%PY%" scripts\serve.py
 if errorlevel 1 (
   echo.
-  echo Failed to start. Tried:
+  echo 啟動失敗。已嘗試執行：
   echo   "%PY%" scripts\serve.py
   echo.
   pause

@@ -107,6 +107,38 @@ export function stars(n) {
   return "★".repeat(n);
 }
 
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// Interpolates a phase's min/max stat frame at a given level (1..phase.maxLevel).
+export function baseStatsAt(phase, level) {
+  const maxLv = phase.maxLevel;
+  const t = maxLv <= 1 ? 1 : (level - 1) / (maxLv - 1);
+  const out = {};
+  for (const key of Object.keys(phase.min)) {
+    const raw = lerp(phase.min[key], phase.max[key], t);
+    out[key] = key === "interval" || key === "res" ? Math.round(raw * 100) / 100 : Math.round(raw);
+  }
+  return out;
+}
+
+// Adds trust bonus scaled by ratio (0..1) onto stats produced by baseStatsAt. Mutates and returns stats.
+export function applyTrust(stats, trust, ratio) {
+  if (!trust || !ratio) return stats;
+  stats.hp += Math.round((trust.hp || 0) * ratio);
+  stats.atk += Math.round((trust.atk || 0) * ratio);
+  stats.def += Math.round((trust.def || 0) * ratio);
+  stats.res += Math.round((trust.res || 0) * ratio * 100) / 100;
+  return stats;
+}
+
+// Derives DPS from atk/interval onto stats. Mutates and returns stats.
+export function withDps(stats) {
+  stats.dps = stats.interval ? Math.round((stats.atk / stats.interval) * 10) / 10 : 0;
+  return stats;
+}
+
 export function setAccent(el, prof) {
   el.style.setProperty("--accent", `var(--${prof})`);
 }
