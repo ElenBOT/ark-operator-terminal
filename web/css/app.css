@@ -661,13 +661,16 @@ body.is-detail #app { padding-right: 84px; }
 .mat-dock-head {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 8px 6px;
+  align-items: stretch;
+  height: 38px;
   border-bottom: 1px solid var(--line);
 }
 .mat-dock-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
   line-height: 1;
   font-size: 10px;
   letter-spacing: 0.16em;
@@ -676,23 +679,26 @@ body.is-detail #app { padding-right: 84px; }
   overflow: hidden;
 }
 .mat-dock:not(.expanded) .mat-dock-title { display: none; }
+/* A dedicated square cell (not a small button floating in padded space) so
+   the icon centers reliably regardless of whether the title next to it is
+   shown or hidden. */
 .mat-dock-handle {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  line-height: 1;
-  padding: 0;
-  background: transparent;
-  border: 1px solid var(--line);
-  color: var(--ink-dim);
-  cursor: pointer;
+  width: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--line);
+  color: var(--ink-dim);
+  cursor: pointer;
   margin-left: auto;
 }
 .mat-dock.expanded .mat-dock-handle { margin-left: 0; }
-.mat-dock-handle:hover { color: var(--ink); border-color: var(--gold-dim); }
+.mat-dock-handle:hover { color: var(--ink); background: #1a222a; }
 .mat-dock-summary {
   flex: 0 0 auto;
   display: none;
@@ -1006,7 +1012,7 @@ tr[data-stage] { cursor: help; }
     border-left: 0; border-top: 1px solid var(--line);
   }
   .mat-dock.expanded { flex-direction: column; height: min(70vh, 560px); }
-  .mat-dock:not(.expanded) .mat-dock-head { flex-direction: column; justify-content: center; border-bottom: 0; border-right: 1px solid var(--line); }
+  .mat-dock:not(.expanded) .mat-dock-head { flex-direction: column; justify-content: center; height: auto; border-bottom: 0; border-right: 1px solid var(--line); }
   .mat-dock:not(.expanded) .mat-dock-list { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
   .mat-dock.expanded .mat-dock-list { flex: 1 1 40%; flex-wrap: wrap; overflow-y: auto; }
   .mat-dock:not(.expanded) .mat-node { flex: 0 0 auto; }

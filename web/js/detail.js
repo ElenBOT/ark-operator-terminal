@@ -106,7 +106,10 @@ export function previewMax(op, detail) {
   detail.levelByElite = op.phases.map((p) => p.maxLevel);
   detail.skillLevelShared = 7;
   detail.mastery = (op.skillRefs || []).map(() => 3);
-  detail.potential = op.maxPotential || 1;
+  // Potential doesn't cost materials (never part of a plan snapshot), so there's
+  // no reason "max out everything for planning" should also max potential —
+  // leave it at 1 rather than op.maxPotential.
+  detail.potential = 1;
   detail.trust = 200;
 }
 
@@ -353,10 +356,10 @@ function planBar(handlers) {
     return b;
   };
   row.append(
-    mkBtn("預覽初始", handlers.onPreviewBase, "把左側面板跳到精 0／Lv1／技能 1／無專精"),
+    mkBtn("設為初始", handlers.onPreviewBase, "把左側面板跳到精 0／Lv1／技能 1／無專精；有編輯中的分頁時會直接寫入"),
     mkBtn("編輯當前", handlers.onEditCurrent, "調整左側面板時直接改「當前」養成狀態；再按一次關閉編輯", "current"),
     mkBtn("編輯目標", handlers.onEditTarget, "調整左側面板時直接改「目標」養成狀態；再按一次關閉編輯", "target"),
-    mkBtn("預覽滿級", handlers.onPreviewMax, "把左側面板跳到滿精滿級／技能 7／專精滿")
+    mkBtn("設為滿級", handlers.onPreviewMax, "把左側面板跳到滿精滿級／技能 7／專精滿；有編輯中的分頁時會直接寫入")
   );
   return row;
 }
@@ -425,10 +428,20 @@ function matEmpty(text) {
   return p;
 }
 
+// Skill level as one compact token: the highest mastery among this snapshot's
+// skills wins the display (as a roman numeral, matching the 專I-III buttons)
+// since a mastered skill's "real" level for planning purposes is its mastery,
+// not the shared 1-7 level underneath it; otherwise just the shared level.
+function skillDisplay(snap) {
+  const maxMastery = Math.max(0, ...snap.mastery);
+  if (maxMastery > 0) return ["Ⅰ", "Ⅱ", "Ⅲ"][maxMastery - 1];
+  return String(snap.skillLevelShared);
+}
+
 function planSummaryText(current, target) {
-  const skillPart =
-    current.skillLevelShared === target.skillLevelShared ? "" : `　技能 ${current.skillLevelShared}→${target.skillLevelShared}`;
-  return `精 ${current.elite}／Lv${current.level} → 精 ${target.elite}／Lv${target.level}${skillPart}`;
+  const c = `精${current.elite}／Lv${current.level}／${skillDisplay(current)}`;
+  const t = `精${target.elite}／Lv${target.level}／${skillDisplay(target)}`;
+  return `${c} → ${t}`;
 }
 
 function syncMaterialsDock(root, data, op, detail) {
@@ -941,8 +954,20 @@ function syncSkillPanel(root, data, op, detail) {
       btn.addEventListener("click", () => {
         // Buttons 0-6 set the shared skill level (all skills); 7-9 set this
         // skill's own mastery rank — the two axes are independent in-game.
-        if (i < 7) detail.skillLevelShared = i + 1;
-        else detail.mastery[detail.skillIndex] = i - 6;
+        // Picking a plain level also clears this skill's own mastery: the
+        // highlight logic below always prefers mastery over the shared level
+        // when mastery > 0 (a mastered skill's "real" level IS its mastery),
+        // so without this a Lv 1-7 click would silently do nothing visible
+        // whenever mastery was already set — which it is by default (every
+        // skill starts at mastery 3, see createDetailState) — making the
+        // level buttons look completely unresponsive until mastery was
+        // explicitly zeroed out some other way.
+        if (i < 7) {
+          detail.skillLevelShared = i + 1;
+          detail.mastery[detail.skillIndex] = 0;
+        } else {
+          detail.mastery[detail.skillIndex] = i - 6;
+        }
         syncDetail(root, data, op, detail);
       });
       lvSlot.appendChild(btn);
