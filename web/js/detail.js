@@ -304,10 +304,11 @@ export function syncDetail(root, data, op, detail) {
 function planBar(handlers) {
   const row = document.createElement("div");
   row.className = "glass plan-bar";
-  const mkBtn = (label, fn, title) => {
+  const mkBtn = (label, fn, title, plan) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "plan-btn";
+    if (plan) b.dataset.plan = plan;
     b.textContent = label;
     if (title) b.title = title;
     b.addEventListener("click", fn);
@@ -315,8 +316,8 @@ function planBar(handlers) {
   };
   row.append(
     mkBtn("預覽初始", handlers.onPreviewBase, "把左側面板跳到精 0／Lv1／技能 1／無專精"),
-    mkBtn("設為當前", handlers.onSetCurrent, "把現在面板上的養成狀態記為「當前」"),
-    mkBtn("設為目標", handlers.onSetTarget, "把現在面板上的養成狀態記為「目標」"),
+    mkBtn("設為當前", handlers.onSetCurrent, "把現在面板上的養成狀態記為「當前」", "current"),
+    mkBtn("設為目標", handlers.onSetTarget, "把現在面板上的養成狀態記為「目標」", "target"),
     mkBtn("預覽滿級", handlers.onPreviewMax, "把左側面板跳到滿精滿級／技能 7／專精滿")
   );
   return row;
@@ -326,6 +327,11 @@ function materialsDock() {
   const box = document.createElement("aside");
   box.className = "mat-dock";
   box.dataset.slot = "mat-dock";
+  const head = document.createElement("div");
+  head.className = "mat-dock-head";
+  const title = document.createElement("span");
+  title.className = "mat-dock-title";
+  title.textContent = "養成材料";
   const handle = document.createElement("button");
   handle.type = "button";
   handle.className = "mat-dock-handle";
@@ -335,13 +341,14 @@ function materialsDock() {
     box.classList.toggle("expanded");
     handle.textContent = box.classList.contains("expanded") ? "›" : "‹";
   });
-  const head = document.createElement("div");
-  head.className = "mat-dock-head";
-  head.textContent = "養成材料";
+  head.append(title, handle);
+  const summary = document.createElement("div");
+  summary.className = "mat-dock-summary";
+  summary.dataset.slot = "mat-summary";
   const list = document.createElement("div");
   list.className = "mat-dock-list";
   list.dataset.slot = "mat-list";
-  box.append(handle, head, list);
+  box.append(head, summary, list);
   return box;
 }
 
@@ -352,11 +359,29 @@ function matEmpty(text) {
   return p;
 }
 
+function planSummaryText(current, target) {
+  if (!current && !target) return "";
+  if (current && !target) return `當前：精 ${current.elite}／Lv${current.level}（尚未設定目標）`;
+  if (!current && target) return `目標：精 ${target.elite}／Lv${target.level}（尚未設定當前）`;
+  const skillPart =
+    current.skillLevelShared === target.skillLevelShared ? "" : `　技能 ${current.skillLevelShared}→${target.skillLevelShared}`;
+  return `精 ${current.elite}／Lv${current.level} → 精 ${target.elite}／Lv${target.level}${skillPart}`;
+}
+
 function syncMaterialsDock(root, data, op, detail) {
   const list = root.querySelector('[data-slot="mat-list"]');
   if (!list) return;
-  list.replaceChildren();
   const { current, target } = detail.matPlan;
+
+  const curBtn = root.querySelector('[data-plan="current"]');
+  const tgtBtn = root.querySelector('[data-plan="target"]');
+  if (curBtn) curBtn.classList.toggle("set", !!current);
+  if (tgtBtn) tgtBtn.classList.toggle("set", !!target);
+
+  const summary = root.querySelector('[data-slot="mat-summary"]');
+  if (summary) summary.textContent = planSummaryText(current, target);
+
+  list.replaceChildren();
   if (!current || !target) {
     list.appendChild(matEmpty("先按「設為當前」與「設為目標」各記一次養成狀態，這裡會列出中間需要的材料。"));
     return;
@@ -371,6 +396,11 @@ function syncMaterialsDock(root, data, op, detail) {
   for (const id of ids) list.appendChild(materialChip(data, id, counts[id]));
 }
 
+function formatCount(n) {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}萬`;
+  return String(n);
+}
+
 function materialChip(data, id, count) {
   const info = data.materials[id];
   const wrap = document.createElement("div");
@@ -378,29 +408,41 @@ function materialChip(data, id, count) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "mat-chip";
+  btn.title = `${info?.name || id} ×${count}`;
   btn.appendChild(matIconEl(info?.iconId || id));
   const label = document.createElement("span");
   label.className = "mat-chip-label";
   label.textContent = info?.name || id;
   const n = document.createElement("b");
   n.className = "mat-chip-count";
-  n.textContent = `×${count}`;
+  n.textContent = `×${formatCount(count)}`;
   btn.append(label, n);
   const box = document.createElement("div");
   box.className = "mat-detail";
   box.hidden = true;
   btn.addEventListener("click", () => {
     const willOpen = box.hidden;
-    wrap.parentElement?.querySelectorAll(".mat-detail").forEach((el) => {
+    const siblings = wrap.parentElement;
+    siblings?.querySelectorAll(".mat-detail").forEach((el) => {
       el.hidden = true;
     });
-    wrap.parentElement?.querySelectorAll(".mat-chip.open").forEach((el) => el.classList.remove("open"));
+    siblings?.querySelectorAll(".mat-chip.open").forEach((el) => el.classList.remove("open"));
+    siblings?.querySelectorAll(".mat-chip-wrap.open").forEach((el) => el.classList.remove("open"));
     if (willOpen) {
       box.hidden = false;
       btn.classList.add("open");
+      wrap.classList.add("open");
       if (!box.dataset.filled) {
         box.innerHTML = materialDetailHtml(data, info);
         box.dataset.filled = "1";
+      }
+      // A material's stage/craft detail needs real width to read — force the
+      // dock open if the user clicked a chip while it was still collapsed.
+      const dock = wrap.closest(".mat-dock");
+      if (dock && !dock.classList.contains("expanded")) {
+        dock.classList.add("expanded");
+        const handle = dock.querySelector(".mat-dock-handle");
+        if (handle) handle.textContent = "›";
       }
     }
   });
