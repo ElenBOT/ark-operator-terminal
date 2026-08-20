@@ -187,6 +187,7 @@ export function renderOperator(app, data, op, detail, handlers) {
   if (data.stageDrops) stageDropsRef = data.stageDrops;
   ensureTermTips();
   ensureStageTips();
+  closePopoversFrom(0);
   const branch = branchOf(data, op.branchId);
   const wrap = document.createElement("div");
   wrap.className = "dossier";
@@ -504,6 +505,8 @@ function renderMaterialDetail(root, data, id) {
   const titleEl = root.querySelector('[data-slot="mat-detail-title"]');
   const bodyEl = root.querySelector('[data-slot="mat-detail-body"]');
   if (!titleEl || !bodyEl) return;
+  closePopoversFrom(0);
+  titleEl.replaceChildren();
   if (!id) {
     titleEl.textContent = "點材料看取得方式";
     titleEl.classList.add("muted");
@@ -511,8 +514,20 @@ function renderMaterialDetail(root, data, id) {
     return;
   }
   const info = data.materials[id];
-  titleEl.textContent = info?.name || id;
   titleEl.classList.remove("muted");
+  titleEl.appendChild(matIconEl(info?.iconId || id));
+  const nameSpan = document.createElement("span");
+  nameSpan.textContent = info?.name || id;
+  titleEl.appendChild(nameSpan);
+  if (info?.craft) {
+    const craftBtn = document.createElement("button");
+    craftBtn.type = "button";
+    craftBtn.className = "craft-open-btn";
+    craftBtn.textContent = "合成表 ›";
+    craftBtn.title = "看這個材料怎麼合成";
+    craftBtn.addEventListener("click", () => openCraftPopover(data, id, craftBtn, 0));
+    titleEl.appendChild(craftBtn);
+  }
   bodyEl.innerHTML = materialDetailHtml(data, info);
 }
 
@@ -520,6 +535,8 @@ function renderFarmPlan(root, data, counts) {
   const titleEl = root.querySelector('[data-slot="mat-detail-title"]');
   const bodyEl = root.querySelector('[data-slot="mat-detail-body"]');
   if (!titleEl || !bodyEl) return;
+  closePopoversFrom(0);
+  titleEl.replaceChildren();
   titleEl.textContent = "刷圖計畫";
   titleEl.classList.remove("muted");
   bodyEl.innerHTML = renderFarmPlanHtml(data, planFarmStrategy(data, counts));
@@ -563,7 +580,7 @@ function renderFarmPlanHtml(data, plan) {
   }
   if (plan.unresolved.length) {
     const names = plan.unresolved.map((u) => `${esc(data.materials[u.id]?.name || u.id)} ×${Math.ceil(u.count)}`).join("、");
-    parts.push(`<p class="plan-unresolved">沒有已知取得方式，無法排進計畫：${names}</p>`);
+    parts.push(`<p class="plan-unresolved">至資源收集關卡獲取，未排入計畫：${names}</p>`);
   }
   if (!parts.length) parts.push(`<p class="muted">目前不需要額外刷材料。</p>`);
   return parts.join("");
@@ -577,41 +594,35 @@ const OCC_PER = {
   SOMETIMES: { label: "罕見", cls: "occ-sometimes" },
 };
 
-function materialDetailHtml(data, info) {
-  if (!info) return `<p class="muted">沒有已知取得方式。</p>`;
-  const parts = [];
-  if (info.drops && info.drops.length) {
-    const rows = info.drops
-      .map((d, i) => {
-        const occ = OCC_PER[d.occPer];
-        const occHtml = occ ? `<span class="occ-tag ${occ.cls}">${occ.label}</span>` : `<span class="muted">—</span>`;
-        return `
+function dropTableHtml(drops) {
+  const rows = drops
+    .map((d, i) => {
+      const occ = OCC_PER[d.occPer];
+      const occHtml = occ ? `<span class="occ-tag ${occ.cls}">${occ.label}</span>` : `<span class="muted">—</span>`;
+      return `
       <tr class="${i === 0 ? "best" : ""}" data-stage="${esc(d.stageId)}">
         <td>${esc(d.code)}</td>
         <td>${occHtml}</td>
         <td class="num">${d.apCost}</td>
         <td class="num">${d.apPerItem}</td>
       </tr>`;
-      })
-      .join("");
-    parts.push(`
+    })
+    .join("");
+  return `
       <table class="mat-drop-table">
         <thead><tr><th>關卡</th><th>掉落機率</th><th>理智/關卡</th><th>理智(期望值)/材料</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>`);
-  }
-  if (info.craft) {
-    const ingredients = (info.craft.costs || [])
-      .map((c) => `<span class="mat-craft-item">${esc(data.materials[c.id]?.name || c.id)} ×${c.count}</span>`)
-      .join("");
-    parts.push(`
-      <div class="mat-craft">
-        <div class="mat-craft-out">加工站合成 ${info.craft.count} 個，消耗 ${info.craft.goldCost} 龍門幣：</div>
-        <div class="mat-craft-in">${ingredients}</div>
-      </div>`);
-  }
-  if (!parts.length) parts.push(`<p class="muted">沒有已知取得方式。</p>`);
-  return parts.join("");
+      </table>`;
+}
+
+// Craft recipes now live in the popover opened by the "合成表" button next to
+// the title (see openCraftPopover) rather than inline here, so this only has
+// to decide what to say when there's no drop table to show.
+function materialDetailHtml(data, info) {
+  if (!info) return `<p class="muted">沒有已知取得方式。</p>`;
+  if (info.drops && info.drops.length) return dropTableHtml(info.drops);
+  if (info.craft) return `<p class="muted">沒有直接掉落，點上面「合成表」看怎麼合成。</p>`;
+  return `<p class="muted">至資源收集關卡獲取。</p>`;
 }
 
 function controlBlock(op, detail, handlers) {
@@ -989,10 +1000,14 @@ function ensureStageTips() {
     hideStageTip();
   });
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") hideStageTip();
+    if (ev.key === "Escape") {
+      hideStageTip();
+      closePopoversFrom(popoverStack.length - 1);
+    }
   });
   window.addEventListener("scroll", hideStageTip, true);
   window.addEventListener("resize", hideStageTip);
+  window.addEventListener("resize", () => closePopoversFrom(0));
 }
 
 // Every item this stage drops (within our ~92-material universe), at its own
@@ -1001,16 +1016,115 @@ function showStageTip(el) {
   const stageId = el.dataset.stage;
   const items = stageDropsRef[stageId] || [];
   if (!items.length || !stageTipEl) return;
-  const rows = items
-    .map((d) => `<div class="stage-tip-row"><span>${esc(materialsRef[d.id]?.name || d.id)}</span><b>${d.qty}/次</b></div>`)
-    .join("");
-  stageTipEl.innerHTML = `<b>本關掉落（單次期望值）</b>${rows}`;
+  stageTipEl.replaceChildren();
+  const head = document.createElement("b");
+  head.textContent = "本關掉落（單次期望值）";
+  stageTipEl.appendChild(head);
+  for (const d of items) {
+    const row = document.createElement("div");
+    row.className = "stage-tip-row";
+    row.appendChild(matIconEl(materialsRef[d.id]?.iconId || d.id));
+    const name = document.createElement("span");
+    name.textContent = materialsRef[d.id]?.name || d.id;
+    const qty = document.createElement("b");
+    qty.textContent = `${d.qty}/次`;
+    row.append(name, qty);
+    stageTipEl.appendChild(row);
+  }
   positionTip(stageTipEl, el);
 }
 
 function hideStageTip() {
   if (!stageTipEl) return;
   stageTipEl.hidden = true;
+}
+
+// Recipe drill-down: each level is its own small floating panel (not a modal),
+// anchored near whatever was clicked to open it. Clicking an ingredient that
+// itself has a recipe opens the next level; closing a level closes everything
+// opened from inside it too, since those are only meaningful with it still open.
+let popoverStack = [];
+
+function closePopoversFrom(level) {
+  for (let i = popoverStack.length - 1; i >= level; i -= 1) {
+    popoverStack[i].remove();
+  }
+  popoverStack.length = Math.min(popoverStack.length, level);
+}
+
+function positionPopover(el, anchor) {
+  const rect = anchor.getBoundingClientRect();
+  const pad = 8;
+  const width = el.offsetWidth;
+  const height = el.offsetHeight;
+  let left = rect.right + 8;
+  if (left + width > window.innerWidth - pad) left = rect.left - width - 8;
+  if (left < pad) left = pad;
+  let top = rect.top;
+  if (top + height > window.innerHeight - pad) top = window.innerHeight - height - pad;
+  if (top < pad) top = pad;
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+
+function openCraftPopover(data, id, anchorEl, level) {
+  closePopoversFrom(level);
+  const info = data.materials[id];
+  const pop = document.createElement("div");
+  pop.className = "craft-popover";
+  const head = document.createElement("div");
+  head.className = "craft-popover-head";
+  head.appendChild(matIconEl(info?.iconId || id));
+  const name = document.createElement("b");
+  name.textContent = info?.name || id;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "craft-popover-close";
+  close.textContent = "×";
+  close.title = "關閉";
+  close.addEventListener("click", () => closePopoversFrom(level));
+  head.append(name, close);
+  const body = document.createElement("div");
+  body.className = "craft-popover-body";
+  if (info?.craft) {
+    const note = document.createElement("div");
+    note.className = "craft-popover-note";
+    note.textContent = `加工站合成 ${info.craft.count} 個，消耗 ${info.craft.goldCost} 龍門幣：`;
+    body.appendChild(note);
+    for (const c of info.craft.costs || []) {
+      body.appendChild(craftIngredientRow(data, c, level));
+    }
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "沒有合成配方。";
+    body.appendChild(empty);
+  }
+  pop.append(head, body);
+  document.body.appendChild(pop);
+  positionPopover(pop, anchorEl);
+  popoverStack[level] = pop;
+  popoverStack.length = level + 1;
+}
+
+function craftIngredientRow(data, cost, level) {
+  const ingInfo = data.materials[cost.id];
+  const canExpand = !!ingInfo?.craft;
+  const row = document.createElement(canExpand ? "button" : "div");
+  if (canExpand) row.type = "button";
+  row.className = "craft-ing-row" + (canExpand ? " expandable" : "");
+  row.appendChild(matIconEl(ingInfo?.iconId || cost.id));
+  const label = document.createElement("span");
+  label.textContent = `${ingInfo?.name || cost.id} ×${cost.count}`;
+  row.appendChild(label);
+  if (canExpand) {
+    const arrow = document.createElement("span");
+    arrow.className = "craft-ing-arrow";
+    arrow.textContent = "›";
+    row.appendChild(arrow);
+    row.addEventListener("click", () => openCraftPopover(data, cost.id, row, level + 1));
+  }
+  return row;
 }
 
 function currentSkillLevel(data, op, detail) {
