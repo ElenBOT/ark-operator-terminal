@@ -95,10 +95,12 @@ python scripts\build_data.py
 - [ ] 滑鼠移到說明文字裡的專有名詞（例如「暈眩」「庇護」）上有 tooltip；找不到定義的詞不應該掛 tooltip 也不該整段消失
 - [ ] 頭像連去 PRTS Wiki 的連結網址正確（幹員中文名對得上）
 - [ ] 養成材料計算機：切換技能分頁時，共用技能等級（1-7）反白同步、專精（Ⅰ-Ⅲ）維持各分頁獨立（不會因為切分頁互相污染）
-- [ ] 按「預覽初始」「預覽滿級」左側旋鈕整組跳到底/滿；按「設為當前」「設為目標」旋鈕本身不動，只記錄狀態；兩者都設過後右側材料面板才會列材料，只設一邊會看到引導文字
-- [ ] 右側材料面板：預設窄版直列可捲動；點展開把手變寬版橫式並自動換行；點材料展開明細，只有一個能同時展開
-- [ ] 材料明細：有掉落來源的顯示關卡表（依理智期望值由低到高排序、第一筆標最優）；只能合成的顯示配方＋龍門幣；兩者都沒有顯示「沒有已知取得方式」
-- [ ] 換一個精英化上限不同的幹員（1★／3★／6★都試一次）不會壞掉；材料面板會重置成未設定狀態
+- [ ] 一進頁面「當前」「目標」都是滿級，右側材料面板顯示「不需要材料」的空狀態，兩顆分頁鈕都沒有反白
+- [ ] 按「編輯當前」後調整精英化／等級／技能，數值即時寫回「當前」（不用再按一次）；按「編輯目標」會切換到編輯「目標」，旋鈕跳成目標當時的值；再按一次目前反白的那顆會關閉編輯（回到單純預覽，兩份都不寫入）
+- [ ] 「預覽初始」「預覽滿級」在有編輯中的分頁時，也會直接寫進那份養成狀態（不是單純預覽）
+- [ ] 右側材料面板：預設窄版直列可捲動、無左右滾動條；展開把手在收合/展開狀態都清楚可見且可點；展開後上方是材料格、下方是共用的「取得方式」面板；點材料才會把內容填進下面那塊，換材料會覆蓋而不是疊加彈窗
+- [ ] 材料明細：有掉落來源的顯示關卡表（代號／掉落機率標籤／理智/關卡／理智(期望值)/材料，由低到高排序、第一筆標最優）；只能合成的顯示配方＋龍門幣；兩者都沒有顯示「沒有已知取得方式」；掉落機率欄位缺資料時顯示「—」，不是空白或報錯
+- [ ] 換一個精英化上限不同的幹員（1★／3★／6★都試一次）不會壞掉；材料面板會重置回「當前=目標=滿級」的空狀態
 
 **搜尋**
 - [ ] 打字有即時結果、`Enter` 選第一筆、`Esc` 關閉並清空焦點
@@ -130,7 +132,20 @@ python scripts\build_data.py
 - 資料管線：`scripts/build_data.py` 新增 `item_table`／`stage_table`／`building_data`（CN+TW）+ 企鵝物流 CN 矩陣，算出 `operators[cid].evolveCost`／`skillLevelCost`／`skillRefs[i].masteryCost`，以及頂層 `materials`／`levelTable`／`expItems`。細節與「精英化階段 vs 星級」索引地雷見上面「養成材料計算機的資料管線」一節。
 - `web/js/materials.js`（新檔）：`planMaterials(data, op, current, target)` 純函式，算精英化+練級+技能等級+專精材料差額，龍門幣與經驗（換算成書）併入同一份材料清單，不另開欄位。已用 Python 重算一遍比對過真實幹員數字（Amiya E0Lv1→E2 滿級：約 82 萬龍門幣、73 萬經驗，數量級跟社群估算一致）。
 - `web/js/detail.js`：技能等級狀態拆成 `skillLevelShared`（1-7，全技能共用）跟 `mastery[]`（每技能 0-3，各自獨立）——**這同時修掉一個既有 bug**：原本兩者共用同一個 `skillLevel` 欄位，切技能分頁時專精會互相污染。新增按鈕列（`planBar`）與右側材料停靠面板（`materialsDock`／`syncMaterialsDock`），`matPlan.current`／`matPlan.target` 存兩次旋鈕快照。
-- `web/js/app.js`：`showOperator` 的 `handlers` 補 `onPreviewBase`／`onPreviewMax`／`onSetCurrent`／`onSetTarget`。
+- `web/js/app.js`：`showOperator` 的 `handlers` 補 `onPreviewBase`／`onPreviewMax`／`onEditCurrent`／`onEditTarget`。
 - `web/css/app.css`：`.plan-bar`、`.mat-dock`（`position: fixed` 貼視窗右緣，獨立於 `.file-body` 既有兩欄版面之外，收合/展開靠 `.expanded` class 切寬度）、材料卡／關卡表／合成配方樣式，含手機斷點的簡化版（底部橫條）。
 - 已知：材料圖示走跟頭像同一套 GitHub raw 後援鏈，目前有 4 個材料（`MTL_SL_XWB`／`HTT`／`XW`／`HT` 這幾個 iconId）兩邊都連不到圖，純圖示缺角，不影響數字。
 - 實測方式：本機起純 `python -m http.server`（不要用 `serve.py`，會自動開真的瀏覽器視窗）＋ headless Chrome，記得**強制重新整理（Ctrl+Shift+R）**——plain http.server 沒有 `Cache-Control: no-store`，一般重新整理／`navigate` 工具換 hash 都可能吃到瀏覽器快取的舊 `app.css`／`app.js`，導致新樣式或邏輯看起來「沒生效」，其實是快取問題不是程式碼問題。
+
+### 使用者實測後的兩輪修正
+
+第一輪（面板本身壞的）：
+- 收合狀態（72px）圖示+數量原本並排放，龍門幣這種六位數的數字直接把面板撐出橫向捲軸——改成圖示/數量上下堆疊，且數字 ≥10000 一律顯示成「X.X萬」（`formatCount`）。
+- 展開/收合把手原本用「絕對定位戳到容器外面」的技巧（`left:-18px`），但容器本身 `overflow:hidden` 會把戳出去的部分裁掉，導致把手根本看不到。改成把手就是頭部列裡的正常排版元素，不再依賴負值定位。
+- 點材料原本是每個材料各自彈出一個小框，塞在兩欄網格裡只有 ~40px 寬，關卡表完全擠不下——這正是使用者說「沒看到理智計算機」的真正原因（東西其實有算出來，只是版面小到看不見）。
+
+第二輪（互動模式重新設計）：
+- 「設為當前／設為目標」（一次性快照按鈕）整個換成「編輯當前／編輯目標」（有記憶的分頁式即時編輯）：`detail.editing` 存 `"current"|"target"|null`；按下分頁鈕會把左側旋鈕**載入**該分頁存的值，之後旋鈕怎麼調，`syncDetail` 每次都會把當下旋鈕狀態**寫回**那一分頁（`detail.matPlan[detail.editing] = planSnapshot(op, detail)`）；再按一次目前反白的分頁鈕會把 `editing` 設回 `null`，回到「單純預覽、兩份都不寫」。`createDetailState` 預設兩份都是滿級快照，所以材料清單一開始是空的。
+- 材料的「取得方式」從每個材料各自的彈出框，改成整個面板下半部固定一塊共用區（`.mat-dock-detail`／`data-slot="mat-detail-title"`／`data-slot="mat-detail-body"`），點材料只是把內容填進去，同一時間只顯示一個材料的內容，不再有「擠在小格子裡」的問題。
+- `pack_materials()`（`build_data.py`）新增 `occPer`：從 `item_table.json` 每個材料自己的 `stageDropList` 依 `stageId` 反查掉落機率分級（`ALWAYS`/`ALMOST`/`OFTEN`/`USUAL`/`SOMETIMES`），跟企鵝物流矩陣是兩個不同來源、用 `stageId` 對起來的。約兩成的列查不到（活動/輪替關卡通常沒登記在這個欄位），前端顯示「—」，這是資料本身的缺口、不是程式漏接。
+- 關卡表拿掉「名稱」欄，換成這個掉落機率標籤（`OCC_PER` 字典映射到中文字＋顏色），欄位標題也改清楚：「理智/關卡」（單次消耗）、「理智(期望值)/材料」（拿到一個平均要花多少理智）。

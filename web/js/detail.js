@@ -34,19 +34,28 @@ let tipEl = null;
 
 export function createDetailState(op) {
   const maxElite = op.maxElite ?? op.phases.length - 1;
+  const levelByElite = op.phases.map((p) => p.maxLevel);
+  const skillLevelShared = 7;
+  const mastery = (op.skillRefs || []).map(() => 3);
+  const maxSnapshot = () => ({ elite: maxElite, level: levelByElite[maxElite], skillLevelShared, mastery: mastery.slice() });
   return {
     id: op.id,
     elite: maxElite,
-    levelByElite: op.phases.map((p) => p.maxLevel),
+    levelByElite,
     potential: 1,
     trust: 200,
     skillIndex: BASIC_SKILL,
     // Skill level 1-7 is shared by every skill (real game mechanic); mastery I-III
     // is independent per skill. These used to be conflated into one `skillLevel`
     // field that leaked across skill tabs — kept separate here on purpose.
-    skillLevelShared: 7,
-    mastery: (op.skillRefs || []).map(() => 3),
-    matPlan: { current: null, target: null },
+    skillLevelShared,
+    mastery,
+    // Which of matPlan.current/target the elite/level/skill controls are currently
+    // live-editing (null = neither — plain preview, doesn't touch either plan).
+    editing: null,
+    // Both default to the same (max) snapshot, so the material list starts empty.
+    matPlan: { current: maxSnapshot(), target: maxSnapshot() },
+    selectedMaterial: null,
   };
 }
 
@@ -58,6 +67,21 @@ export function planSnapshot(op, detail) {
     skillLevelShared: detail.skillLevelShared,
     mastery: detail.mastery.slice(),
   };
+}
+
+// Switches which plan slot ("current"/"target") the main dials edit live.
+// Clicking the already-active one turns editing off (plain preview again).
+export function toggleEditing(op, detail, which) {
+  if (detail.editing === which) {
+    detail.editing = null;
+    return;
+  }
+  detail.editing = which;
+  const snap = detail.matPlan[which];
+  detail.elite = snap.elite;
+  detail.levelByElite[snap.elite] = snap.level;
+  detail.skillLevelShared = snap.skillLevelShared;
+  detail.mastery = snap.mastery.slice();
 }
 
 export function previewBase(op, detail) {
@@ -227,6 +251,9 @@ export function renderOperator(app, data, op, detail, handlers) {
 }
 
 export function syncDetail(root, data, op, detail) {
+  if (detail.editing) {
+    detail.matPlan[detail.editing] = planSnapshot(op, detail);
+  }
   const stats = computeStats(op, detail);
   const elite = stats.elite;
   const phase = op.phases[elite];
@@ -316,8 +343,8 @@ function planBar(handlers) {
   };
   row.append(
     mkBtn("預覽初始", handlers.onPreviewBase, "把左側面板跳到精 0／Lv1／技能 1／無專精"),
-    mkBtn("設為當前", handlers.onSetCurrent, "把現在面板上的養成狀態記為「當前」", "current"),
-    mkBtn("設為目標", handlers.onSetTarget, "把現在面板上的養成狀態記為「目標」", "target"),
+    mkBtn("編輯當前", handlers.onEditCurrent, "調整左側面板時直接改「當前」養成狀態；再按一次關閉編輯", "current"),
+    mkBtn("編輯目標", handlers.onEditTarget, "調整左側面板時直接改「目標」養成狀態；再按一次關閉編輯", "target"),
     mkBtn("預覽滿級", handlers.onPreviewMax, "把左側面板跳到滿精滿級／技能 7／專精滿")
   );
   return row;
@@ -348,7 +375,17 @@ function materialsDock() {
   const list = document.createElement("div");
   list.className = "mat-dock-list";
   list.dataset.slot = "mat-list";
-  box.append(head, summary, list);
+  const detailPanel = document.createElement("div");
+  detailPanel.className = "mat-dock-detail";
+  const detailTitle = document.createElement("div");
+  detailTitle.className = "mat-detail-title muted";
+  detailTitle.dataset.slot = "mat-detail-title";
+  detailTitle.textContent = "點材料看取得方式";
+  const detailBody = document.createElement("div");
+  detailBody.className = "mat-detail-body";
+  detailBody.dataset.slot = "mat-detail-body";
+  detailPanel.append(detailTitle, detailBody);
+  box.append(head, summary, list, detailPanel);
   return box;
 }
 
@@ -360,9 +397,6 @@ function matEmpty(text) {
 }
 
 function planSummaryText(current, target) {
-  if (!current && !target) return "";
-  if (current && !target) return `當前：精 ${current.elite}／Lv${current.level}（尚未設定目標）`;
-  if (!current && target) return `目標：精 ${target.elite}／Lv${target.level}（尚未設定當前）`;
   const skillPart =
     current.skillLevelShared === target.skillLevelShared ? "" : `　技能 ${current.skillLevelShared}→${target.skillLevelShared}`;
   return `精 ${current.elite}／Lv${current.level} → 精 ${target.elite}／Lv${target.level}${skillPart}`;
@@ -375,25 +409,27 @@ function syncMaterialsDock(root, data, op, detail) {
 
   const curBtn = root.querySelector('[data-plan="current"]');
   const tgtBtn = root.querySelector('[data-plan="target"]');
-  if (curBtn) curBtn.classList.toggle("set", !!current);
-  if (tgtBtn) tgtBtn.classList.toggle("set", !!target);
+  if (curBtn) curBtn.classList.toggle("active", detail.editing === "current");
+  if (tgtBtn) tgtBtn.classList.toggle("active", detail.editing === "target");
 
   const summary = root.querySelector('[data-slot="mat-summary"]');
   if (summary) summary.textContent = planSummaryText(current, target);
 
   list.replaceChildren();
-  if (!current || !target) {
-    list.appendChild(matEmpty("先按「設為當前」與「設為目標」各記一次養成狀態，這裡會列出中間需要的材料。"));
-    return;
-  }
   const counts = planMaterials(data, op, current, target);
   const ids = Object.keys(counts);
   if (!ids.length) {
-    list.appendChild(matEmpty("目標沒有比當前高，不需要材料。"));
+    list.appendChild(matEmpty("當前與目標相同，不需要材料。按「編輯當前」或「編輯目標」調整左側面板來設定兩者。"));
+    if (detail.selectedMaterial) {
+      detail.selectedMaterial = null;
+      renderMaterialDetail(root, data, null);
+    }
     return;
   }
+  if (detail.selectedMaterial && !(detail.selectedMaterial in counts)) detail.selectedMaterial = null;
   ids.sort((a, b) => (data.materials[b]?.rarity || 0) - (data.materials[a]?.rarity || 0));
-  for (const id of ids) list.appendChild(materialChip(data, id, counts[id]));
+  for (const id of ids) list.appendChild(materialChip(root, data, detail, id, counts[id]));
+  renderMaterialDetail(root, data, detail.selectedMaterial);
 }
 
 function formatCount(n) {
@@ -401,13 +437,13 @@ function formatCount(n) {
   return String(n);
 }
 
-function materialChip(data, id, count) {
+function materialChip(root, data, detail, id, count) {
   const info = data.materials[id];
   const wrap = document.createElement("div");
   wrap.className = "mat-chip-wrap";
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "mat-chip";
+  btn.className = "mat-chip" + (detail.selectedMaterial === id ? " open" : "");
   btn.title = `${info?.name || id} ×${count}`;
   btn.appendChild(matIconEl(info?.iconId || id));
   const label = document.createElement("span");
@@ -417,57 +453,68 @@ function materialChip(data, id, count) {
   n.className = "mat-chip-count";
   n.textContent = `×${formatCount(count)}`;
   btn.append(label, n);
-  const box = document.createElement("div");
-  box.className = "mat-detail";
-  box.hidden = true;
   btn.addEventListener("click", () => {
-    const willOpen = box.hidden;
-    const siblings = wrap.parentElement;
-    siblings?.querySelectorAll(".mat-detail").forEach((el) => {
-      el.hidden = true;
-    });
-    siblings?.querySelectorAll(".mat-chip.open").forEach((el) => el.classList.remove("open"));
-    siblings?.querySelectorAll(".mat-chip-wrap.open").forEach((el) => el.classList.remove("open"));
-    if (willOpen) {
-      box.hidden = false;
-      btn.classList.add("open");
-      wrap.classList.add("open");
-      if (!box.dataset.filled) {
-        box.innerHTML = materialDetailHtml(data, info);
-        box.dataset.filled = "1";
-      }
-      // A material's stage/craft detail needs real width to read — force the
-      // dock open if the user clicked a chip while it was still collapsed.
-      const dock = wrap.closest(".mat-dock");
-      if (dock && !dock.classList.contains("expanded")) {
-        dock.classList.add("expanded");
-        const handle = dock.querySelector(".mat-dock-handle");
-        if (handle) handle.textContent = "›";
-      }
+    detail.selectedMaterial = detail.selectedMaterial === id ? null : id;
+    root.querySelectorAll(".mat-chip.open").forEach((el) => el.classList.remove("open"));
+    if (detail.selectedMaterial) btn.classList.add("open");
+    renderMaterialDetail(root, data, detail.selectedMaterial);
+    // The stage/craft table needs real width to read — force the dock open
+    // if the user clicked a chip while it was still collapsed.
+    const dock = root.querySelector('[data-slot="mat-dock"]');
+    if (detail.selectedMaterial && dock && !dock.classList.contains("expanded")) {
+      dock.classList.add("expanded");
+      const handle = dock.querySelector(".mat-dock-handle");
+      if (handle) handle.textContent = "›";
     }
   });
-  wrap.append(btn, box);
+  wrap.append(btn);
   return wrap;
 }
+
+function renderMaterialDetail(root, data, id) {
+  const titleEl = root.querySelector('[data-slot="mat-detail-title"]');
+  const bodyEl = root.querySelector('[data-slot="mat-detail-body"]');
+  if (!titleEl || !bodyEl) return;
+  if (!id) {
+    titleEl.textContent = "點材料看取得方式";
+    titleEl.classList.add("muted");
+    bodyEl.replaceChildren();
+    return;
+  }
+  const info = data.materials[id];
+  titleEl.textContent = info?.name || id;
+  titleEl.classList.remove("muted");
+  bodyEl.innerHTML = materialDetailHtml(data, info);
+}
+
+const OCC_PER = {
+  ALWAYS: { label: "固定掉落", cls: "occ-always" },
+  ALMOST: { label: "常見掉落", cls: "occ-almost" },
+  OFTEN: { label: "機率掉落", cls: "occ-often" },
+  USUAL: { label: "小機率", cls: "occ-usual" },
+  SOMETIMES: { label: "罕見", cls: "occ-sometimes" },
+};
 
 function materialDetailHtml(data, info) {
   if (!info) return `<p class="muted">沒有已知取得方式。</p>`;
   const parts = [];
   if (info.drops && info.drops.length) {
     const rows = info.drops
-      .map(
-        (d, i) => `
+      .map((d, i) => {
+        const occ = OCC_PER[d.occPer];
+        const occHtml = occ ? `<span class="occ-tag ${occ.cls}">${occ.label}</span>` : `<span class="muted">—</span>`;
+        return `
       <tr class="${i === 0 ? "best" : ""}">
         <td>${esc(d.code)}</td>
-        <td>${esc(d.name)}</td>
+        <td>${occHtml}</td>
         <td class="num">${d.apCost}</td>
         <td class="num">${d.apPerItem}</td>
-      </tr>`
-      )
+      </tr>`;
+      })
       .join("");
     parts.push(`
       <table class="mat-drop-table">
-        <thead><tr><th>關卡</th><th>名稱</th><th>理智</th><th>理智期望值</th></tr></thead>
+        <thead><tr><th>關卡</th><th>掉落機率</th><th>理智/關卡</th><th>理智(期望值)/材料</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`);
   }

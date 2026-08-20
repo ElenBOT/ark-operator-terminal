@@ -398,6 +398,7 @@ def pack_materials(
                 }
             break
 
+        occ_by_stage = {d.get("stageId"): d.get("occPer") for d in (info.get("stageDropList") or [])}
         drops = []
         for row in matrix_by_item.get(iid) or []:
             stage = stages.get(row.get("stageId"))
@@ -415,6 +416,7 @@ def pack_materials(
                     "name": convert(stage.get("name") or ""),
                     "apCost": ap,
                     "apPerItem": round(ap * times / qty, 2),
+                    "occPer": occ_by_stage.get(row["stageId"]),
                 }
             )
         drops.sort(key=lambda d: d["apPerItem"])

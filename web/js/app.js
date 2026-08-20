@@ -1,4 +1,4 @@
-import { createDetailState, planSnapshot, previewBase, previewMax, renderOperator, syncDetail } from "./detail.js";
+import { createDetailState, previewBase, previewMax, renderOperator, syncDetail, toggleEditing } from "./detail.js";
 import {
   PROF_ORDER,
   applyTrust,
@@ -403,12 +403,12 @@ function showOperator(id) {
       previewMax(op, detail);
       syncDetail(app, state.data, op, detail);
     },
-    onSetCurrent: () => {
-      detail.matPlan.current = planSnapshot(op, detail);
+    onEditCurrent: () => {
+      toggleEditing(op, detail, "current");
       syncDetail(app, state.data, op, detail);
     },
-    onSetTarget: () => {
-      detail.matPlan.target = planSnapshot(op, detail);
+    onEditTarget: () => {
+      toggleEditing(op, detail, "target");
       syncDetail(app, state.data, op, detail);
     },
   };

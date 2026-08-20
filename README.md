@@ -76,7 +76,7 @@ python -m pip install opencc-python-reimplemented
 - 普通攻擊說明用該幹員特性（群療、範圍傷害、不攻擊等）
 - 技能／特性說明會填 `{atk:0%}` 等佔位符；`<$ba.protect>` 等術語（庇護、暈眩…）滑鼠指上可看說明
 - 搜尋幹員／分支；`/` 對準搜尋、`Esc` 從檔案返回
-- 檔案頁範圍面板下方有「預覽初始／設為當前／設為目標／預覽滿級」按鈕列：前後兩顆記錄旋鈕上的養成狀態（精英化／等級／共用技能等級／各技能專精），算出中間需要的材料。視窗右側材料面板預設窄版直列，可展開成橫式並換行；點材料看可刷關卡（依理智期望值排序、標最優）或加工站合成配方
+- 檔案頁範圍面板下方有「預覽初始／編輯當前／編輯目標／預覽滿級」按鈕列。「編輯當前」「編輯目標」是有記憶的分頁式切換：按下後左側精英化／等級／技能等級／專精旋鈕改成即時編輯那一份養成狀態，調哪個旋鈕就直接改那份，不用再按一次；再按一次同一顆分頁鈕會關閉編輯（回到單純預覽，不寫入任何一份）。預設「當前」「目標」都是滿級，所以材料清單一開始是空的。視窗右側材料面板預設窄版直列，可展開成橫式並換行、上半列材料、下半共用一塊「取得方式」面板；點材料才會把關卡表（依理智期望值排序、標最優、附遊戲內掉落機率標籤）或加工站合成配方填進那塊共用面板
 
 已知限制：
 
@@ -144,7 +144,7 @@ python -m pip install opencc-python-reimplemented
 - `operators[id].skillLevelCost`：長度 6 陣列（技能等級 1→2 … 6→7），每項 `{materials}`。
 - `levelTable.expByPhase` / `lmdByPhase`：**依精英化階段（0/1/2）索引，不是依星級**——這點違反直覺，是拿真實幹員 `maxLevel` 資料反推驗證過的，不要改回「依星級查表」。每個階段的等級都從 1 重新查。
 - `expItems`：`{ itemId: gainExp }`，四階「作戰記錄」書換算表，`materials.js` 的 `expItems Breakdown` 拿去把經驗總量貪心換算成書本數。
-- `materials[id]`：`{ name, rarity, iconId, craft, drops }`。只收會被用到的材料（約 92 種），不是遊戲全部材料。`craft` 是加工站配方（`{goldCost, count, costs}`）或 `null`；`drops` 是依理智期望值排序的關卡清單（`{stageId, code, name, apCost, apPerItem}`），最多 8 筆，兩者皆無就是「沒有已知取得方式」。
+- `materials[id]`：`{ name, rarity, iconId, craft, drops }`。只收會被用到的材料（約 92 種），不是遊戲全部材料。`craft` 是加工站配方（`{goldCost, count, costs}`）或 `null`；`drops` 是依理智期望值排序的關卡清單（`{stageId, code, name, apCost, apPerItem, occPer}`），最多 8 筆；`occPer` 是遊戲拆包原生的掉落機率分級（`ALWAYS`/`ALMOST`/`OFTEN`/`USUAL`/`SOMETIMES`），約兩成的列沒有（拆包沒登記），前端顯示「—」；`craft`／`drops` 兩者皆無就是「沒有已知取得方式」。
 
 攻擊範圍：
 
