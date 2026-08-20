@@ -6,6 +6,7 @@ import {
   baseStatsAt,
   branchOf,
   imgEl,
+  matIconEl,
   profIconEl,
   skillIconEl,
   profName,
@@ -14,6 +15,7 @@ import {
   stars,
   withDps,
 } from "./shared.js";
+import { planMaterials } from "./materials.js";
 
 const SKILL_TYPE = { MANUAL: "手動觸發", AUTO: "自動觸發", PASSIVE: "被動" };
 const SP_TYPE = {
@@ -39,8 +41,42 @@ export function createDetailState(op) {
     potential: 1,
     trust: 200,
     skillIndex: BASIC_SKILL,
-    skillLevel: null,
+    // Skill level 1-7 is shared by every skill (real game mechanic); mastery I-III
+    // is independent per skill. These used to be conflated into one `skillLevel`
+    // field that leaked across skill tabs — kept separate here on purpose.
+    skillLevelShared: 7,
+    mastery: (op.skillRefs || []).map(() => 3),
+    matPlan: { current: null, target: null },
   };
+}
+
+export function planSnapshot(op, detail) {
+  const elite = Math.min(detail.elite, op.phases.length - 1);
+  return {
+    elite,
+    level: detail.levelByElite[elite] ?? op.phases[elite]?.maxLevel ?? 1,
+    skillLevelShared: detail.skillLevelShared,
+    mastery: detail.mastery.slice(),
+  };
+}
+
+export function previewBase(op, detail) {
+  detail.elite = 0;
+  detail.levelByElite = op.phases.map(() => 1);
+  detail.skillLevelShared = 1;
+  detail.mastery = (op.skillRefs || []).map(() => 0);
+  detail.potential = 1;
+  detail.trust = 0;
+}
+
+export function previewMax(op, detail) {
+  const maxElite = op.maxElite ?? op.phases.length - 1;
+  detail.elite = maxElite;
+  detail.levelByElite = op.phases.map((p) => p.maxLevel);
+  detail.skillLevelShared = 7;
+  detail.mastery = (op.skillRefs || []).map(() => 3);
+  detail.potential = op.maxPotential || 1;
+  detail.trust = 200;
 }
 
 export function computeStats(op, detail) {
@@ -173,7 +209,7 @@ export function renderOperator(app, data, op, detail, handlers) {
   body.className = "file-body";
   const left = document.createElement("div");
   left.className = "file-left";
-  left.append(statBlock(), controlBlock(op, detail, handlers), rangeBlock());
+  left.append(statBlock(), controlBlock(op, detail, handlers), planBar(handlers), rangeBlock());
   const right = document.createElement("div");
   right.className = "file-right";
   const trait = document.createElement("div");
@@ -186,7 +222,7 @@ export function renderOperator(app, data, op, detail, handlers) {
   body.append(left, right);
 
   wrap.append(head, body);
-  app.replaceChildren(wrap);
+  app.replaceChildren(wrap, materialsDock());
   syncDetail(app, data, op, detail);
 }
 
@@ -262,6 +298,149 @@ export function syncDetail(root, data, op, detail) {
   }
 
   syncSkillPanel(root, data, op, detail);
+  syncMaterialsDock(root, data, op, detail);
+}
+
+function planBar(handlers) {
+  const row = document.createElement("div");
+  row.className = "glass plan-bar";
+  const mkBtn = (label, fn, title) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "plan-btn";
+    b.textContent = label;
+    if (title) b.title = title;
+    b.addEventListener("click", fn);
+    return b;
+  };
+  row.append(
+    mkBtn("預覽初始", handlers.onPreviewBase, "把左側面板跳到精 0／Lv1／技能 1／無專精"),
+    mkBtn("設為當前", handlers.onSetCurrent, "把現在面板上的養成狀態記為「當前」"),
+    mkBtn("設為目標", handlers.onSetTarget, "把現在面板上的養成狀態記為「目標」"),
+    mkBtn("預覽滿級", handlers.onPreviewMax, "把左側面板跳到滿精滿級／技能 7／專精滿")
+  );
+  return row;
+}
+
+function materialsDock() {
+  const box = document.createElement("aside");
+  box.className = "mat-dock";
+  box.dataset.slot = "mat-dock";
+  const handle = document.createElement("button");
+  handle.type = "button";
+  handle.className = "mat-dock-handle";
+  handle.textContent = "‹";
+  handle.title = "展開／收合材料清單";
+  handle.addEventListener("click", () => {
+    box.classList.toggle("expanded");
+    handle.textContent = box.classList.contains("expanded") ? "›" : "‹";
+  });
+  const head = document.createElement("div");
+  head.className = "mat-dock-head";
+  head.textContent = "養成材料";
+  const list = document.createElement("div");
+  list.className = "mat-dock-list";
+  list.dataset.slot = "mat-list";
+  box.append(handle, head, list);
+  return box;
+}
+
+function matEmpty(text) {
+  const p = document.createElement("p");
+  p.className = "mat-empty muted";
+  p.textContent = text;
+  return p;
+}
+
+function syncMaterialsDock(root, data, op, detail) {
+  const list = root.querySelector('[data-slot="mat-list"]');
+  if (!list) return;
+  list.replaceChildren();
+  const { current, target } = detail.matPlan;
+  if (!current || !target) {
+    list.appendChild(matEmpty("先按「設為當前」與「設為目標」各記一次養成狀態，這裡會列出中間需要的材料。"));
+    return;
+  }
+  const counts = planMaterials(data, op, current, target);
+  const ids = Object.keys(counts);
+  if (!ids.length) {
+    list.appendChild(matEmpty("目標沒有比當前高，不需要材料。"));
+    return;
+  }
+  ids.sort((a, b) => (data.materials[b]?.rarity || 0) - (data.materials[a]?.rarity || 0));
+  for (const id of ids) list.appendChild(materialChip(data, id, counts[id]));
+}
+
+function materialChip(data, id, count) {
+  const info = data.materials[id];
+  const wrap = document.createElement("div");
+  wrap.className = "mat-chip-wrap";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "mat-chip";
+  btn.appendChild(matIconEl(info?.iconId || id));
+  const label = document.createElement("span");
+  label.className = "mat-chip-label";
+  label.textContent = info?.name || id;
+  const n = document.createElement("b");
+  n.className = "mat-chip-count";
+  n.textContent = `×${count}`;
+  btn.append(label, n);
+  const box = document.createElement("div");
+  box.className = "mat-detail";
+  box.hidden = true;
+  btn.addEventListener("click", () => {
+    const willOpen = box.hidden;
+    wrap.parentElement?.querySelectorAll(".mat-detail").forEach((el) => {
+      el.hidden = true;
+    });
+    wrap.parentElement?.querySelectorAll(".mat-chip.open").forEach((el) => el.classList.remove("open"));
+    if (willOpen) {
+      box.hidden = false;
+      btn.classList.add("open");
+      if (!box.dataset.filled) {
+        box.innerHTML = materialDetailHtml(data, info);
+        box.dataset.filled = "1";
+      }
+    }
+  });
+  wrap.append(btn, box);
+  return wrap;
+}
+
+function materialDetailHtml(data, info) {
+  if (!info) return `<p class="muted">沒有已知取得方式。</p>`;
+  const parts = [];
+  if (info.drops && info.drops.length) {
+    const rows = info.drops
+      .map(
+        (d, i) => `
+      <tr class="${i === 0 ? "best" : ""}">
+        <td>${esc(d.code)}</td>
+        <td>${esc(d.name)}</td>
+        <td class="num">${d.apCost}</td>
+        <td class="num">${d.apPerItem}</td>
+      </tr>`
+      )
+      .join("");
+    parts.push(`
+      <table class="mat-drop-table">
+        <thead><tr><th>關卡</th><th>名稱</th><th>理智</th><th>理智期望值</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`);
+  }
+  if (info.craft) {
+    const ingredients = (info.craft.costs || [])
+      .map((c) => `<span class="mat-craft-item">${esc(data.materials[c.id]?.name || c.id)} ×${c.count}</span>`)
+      .join("");
+    parts.push(`
+      <div class="mat-craft">
+        <div class="mat-craft-out">加工站合成 ${info.craft.count} 個，消耗 ${info.craft.goldCost} 龍門幣：</div>
+        <div class="mat-craft-in">${ingredients}</div>
+      </div>`);
+  }
+  if (!parts.length) parts.push(`<p class="muted">沒有已知取得方式。</p>`);
+  return parts.join("");
 }
 
 function controlBlock(op, detail, handlers) {
@@ -496,8 +675,8 @@ function syncSkillPanel(root, data, op, detail) {
     return;
   }
   const maxLv = skill.levels.length;
-  const idx = clamp(detail.skillLevel ?? maxLv - 1, 0, maxLv - 1);
-  detail.skillLevel = idx;
+  const mastery = detail.mastery[detail.skillIndex] || 0;
+  const idx = mastery > 0 ? clamp(6 + mastery, 0, maxLv - 1) : clamp(detail.skillLevelShared - 1, 0, maxLv - 1);
   if (lvSlot.childElementCount !== maxLv || lvSlot.dataset.skill !== ref.id) {
     lvSlot.replaceChildren();
     lvSlot.dataset.skill = ref.id;
@@ -508,7 +687,10 @@ function syncSkillPanel(root, data, op, detail) {
       btn.dataset.lv = String(i);
       btn.textContent = i < 7 ? String(i + 1) : `專${["Ⅰ", "Ⅱ", "Ⅲ"][i - 7]}`;
       btn.addEventListener("click", () => {
-        detail.skillLevel = i;
+        // Buttons 0-6 set the shared skill level (all skills); 7-9 set this
+        // skill's own mastery rank — the two axes are independent in-game.
+        if (i < 7) detail.skillLevelShared = i + 1;
+        else detail.mastery[detail.skillIndex] = i - 6;
         syncDetail(root, data, op, detail);
       });
       lvSlot.appendChild(btn);
@@ -618,7 +800,9 @@ function currentSkillLevel(data, op, detail) {
   if (!ref) return null;
   const skill = data.skills[ref.id];
   if (!skill) return null;
-  const idx = clamp(detail.skillLevel ?? skill.levels.length - 1, 0, skill.levels.length - 1);
+  const maxLv = skill.levels.length;
+  const mastery = detail.mastery[detail.skillIndex] || 0;
+  const idx = mastery > 0 ? clamp(6 + mastery, 0, maxLv - 1) : clamp(detail.skillLevelShared - 1, 0, maxLv - 1);
   return skill.levels[idx];
 }
 

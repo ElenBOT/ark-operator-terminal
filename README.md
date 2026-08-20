@@ -59,8 +59,8 @@ python -m pip install opencc-python-reimplemented
 - 官方**分支**為主分組；同分支再依精 2 範圍、特性形狀、攻擊間隔、阻擋拆小組。
 - **不排名、不寫上位替代**。家族表只做同條件數值對照，最高／最低標色。
 - 語系：繁中（台服名稱優先，沒有的用 OpenCC `s2twp`）。
-- 第一版範圍：家族畫廊 + 家族對照表 + 幹員檔案頁（精英化／等級／潛能／信賴／技能）。
-- 刻意不做：模組、專精材料、練度推薦、手卡收藏、登入。
+- 第一版範圍：家族畫廊 + 家族對照表 + 幹員檔案頁（精英化／等級／潛能／信賴／技能）+ 養成材料計算機（精英化／練級／技能等級／專精材料，含關卡理智期望值與合成配方）。
+- 刻意不做：模組、手卡收藏、登入。
 
 ---
 
@@ -76,15 +76,17 @@ python -m pip install opencc-python-reimplemented
 - 普通攻擊說明用該幹員特性（群療、範圍傷害、不攻擊等）
 - 技能／特性說明會填 `{atk:0%}` 等佔位符；`<$ba.protect>` 等術語（庇護、暈眩…）滑鼠指上可看說明
 - 搜尋幹員／分支；`/` 對準搜尋、`Esc` 從檔案返回
+- 檔案頁範圍面板下方有「預覽初始／設為當前／設為目標／預覽滿級」按鈕列：前後兩顆記錄旋鈕上的養成狀態（精英化／等級／共用技能等級／各技能專精），算出中間需要的材料。視窗右側材料面板預設窄版直列，可展開成橫式並換行；點材料看可刷關卡（依理智期望值排序、標最優）或加工站合成配方
 
 已知限制：
 
 - 不含模組改特性／改範圍
 - 不含潛能對天賦以外的「隱藏數值」模擬（攻速天賦不加進面板 DPS）
-- 頭像走 GitHub raw（`yuanyan3060` → `Aceship` 後援）；離線或被擋時圖會缺
+- 頭像走 GitHub raw（`yuanyan3060` → `Aceship` 後援）；離線或被擋時圖會缺，材料圖示同一套後援也有極少數（目前 4 個）兩邊都沒有
 - CN 比台服新：台服還沒有的卡用簡轉繁名
 - 阿米婭目前資料裡只有術師形態
 - 1 星機器人沒有主動技能（檔案頁仍有「普通攻擊」）
+- 材料計算機：理智期望值來自企鵝物流 **CN** 矩陣（企鵝物流沒有台服資料，這是唯一可行的數字來源）；經驗換算成書本數量是貪心法、非無浪費最佳解；合成配方只顯示一層，不遞迴拆到最底層原材料；關卡效率清單只留前 8 筆；沒有另外核對關卡是否還開放刷取
 
 ---
 
@@ -102,10 +104,11 @@ python -m pip install opencc-python-reimplemented
   web/index.html
   web/css/app.css
   web/js/app.js            路由、首頁、家族表
-  web/js/detail.js         檔案頁、數值／技能說明
-  web/js/shared.js         頭像、範圍格子、職業名
+  web/js/detail.js         檔案頁、數值／技能說明、養成材料計算機 UI
+  web/js/materials.js      養成材料計算純函式（無 DOM）
+  web/js/shared.js         頭像、範圍格子、職業名、材料圖示
   web/img/prof/            官方 8 職業圖
-  web/data/app-data.json   前端唯一資料檔（約 4.8MB）
+  web/data/app-data.json   前端唯一資料檔（約 5.5MB）
 ```
 
 路由（hash）：
@@ -120,22 +123,28 @@ python -m pip install opencc-python-reimplemented
 
 - CN：`Kengxxiao/ArknightsGameData`（jsDelivr）
 - TW：`ArknightsAssets/ArknightsGamedata` 的 `tw/`
+- 企鵝物流（Penguin Stats）CN 掉落矩陣：`penguin-stats.io` API，只在**建置時**打一次、快取到 `data/raw/penguin_matrix_cn.json`，算出材料的關卡理智期望值。企鵝物流沒有 TW 資料。
 
-前端不連網打 API，只讀同站的 `app-data.json`。頭像才連外。GitHub Pages 只發佈 `web/`，Python 與 `data/raw/` 不會上線。
+前端不連網打 API，只讀同站的 `app-data.json`。頭像／材料圖示才連外。GitHub Pages 只發佈 `web/`，Python 與 `data/raw/` 不會上線。
 
 ---
 
 ## 資料形狀（改前端必看）
 
-`app-data.json` 頂層：`professions`、`ranges`、`branches`、`operators`、`skills`、`terms`。
+`app-data.json` 頂層：`professions`、`ranges`、`branches`、`operators`、`skills`、`terms`、`materials`、`levelTable`、`expItems`。
 
 - `branches[].groups[]`：同一底盤的一組人。`primary` 為人數最多的那組；其他人在「特例」。
 - `operators[id].trait`：已填好數字的純文字（家族卡用）。
 - `operators[id].traitEntries[]`：帶 `{placeholder}` 與 `blackboard`，檔案頁依精英化重算。
-- `operators[id].skillRefs[]`：`{ id, unlockElite }`，內文在頂層 `skills`。
-- 技能等級 0–6 = 1–7 級，7–9 = 專Ⅰ–Ⅲ。
-- 潛能顯示 1–6；`potentials[0]` 是潛 2 的加成。
+- `operators[id].skillRefs[]`：`{ id, unlockElite, masteryCost }`，內文在頂層 `skills`。`masteryCost` 是長度 3 的陣列（專 I/II/III），每項 `{materials, unlockElite}`，每個技能各自獨立。
+- 技能等級 0–6 = 1–7 級，7–9 = 專Ⅰ–Ⅲ；**注意技能等級 1-7 是所有技能共用的（`skillLevelCost`），只有專精是每個技能各自的**——這是遊戲本身的機制，`detail.js` 的 `skillLevelShared`／`mastery[]` 就是照這個拆的，不要合回同一個欄位。
+- 潛能顯示 1–6；`potentials[0]` 是潛 2 的加成。潛能／信賴都不吃材料，材料計算機不算這兩項。
 - 信賴 0–200，滿 200 吃完整 `trust` 加成。
+- `operators[id].evolveCost`：長度 2 陣列（精 1、精 2），每項 `{materials, lmd}`；沒有下一階精英化就是 `null`。
+- `operators[id].skillLevelCost`：長度 6 陣列（技能等級 1→2 … 6→7），每項 `{materials}`。
+- `levelTable.expByPhase` / `lmdByPhase`：**依精英化階段（0/1/2）索引，不是依星級**——這點違反直覺，是拿真實幹員 `maxLevel` 資料反推驗證過的，不要改回「依星級查表」。每個階段的等級都從 1 重新查。
+- `expItems`：`{ itemId: gainExp }`，四階「作戰記錄」書換算表，`materials.js` 的 `expItems Breakdown` 拿去把經驗總量貪心換算成書本數。
+- `materials[id]`：`{ name, rarity, iconId, craft, drops }`。只收會被用到的材料（約 92 種），不是遊戲全部材料。`craft` 是加工站配方（`{goldCost, count, costs}`）或 `null`；`drops` 是依理智期望值排序的關卡清單（`{stageId, code, name, apCost, apPerItem}`），最多 8 筆，兩者皆無就是「沒有已知取得方式」。
 
 攻擊範圍：
 
@@ -163,8 +172,9 @@ python -m pip install opencc-python-reimplemented
 
 1. 模組：改特性、數值、範圍
 2. 離線頭像／技能圖快取
-3. 資料更新流程（標 CN／TW 版本日期）
+3. 資料更新流程（標 CN／TW 版本日期，含企鵝物流矩陣多久重抓一次）
 4. 家族表可選「含潛能」基準
+5. 材料計算機：合成配方遞迴展開到最底層原材料、經驗換算改無浪費最佳解
 
 ---
 

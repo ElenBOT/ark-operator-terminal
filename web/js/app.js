@@ -1,4 +1,4 @@
-import { createDetailState, renderOperator, syncDetail } from "./detail.js";
+import { createDetailState, planSnapshot, previewBase, previewMax, renderOperator, syncDetail } from "./detail.js";
 import {
   PROF_ORDER,
   applyTrust,
@@ -393,6 +393,22 @@ function showOperator(id) {
     },
     onSkill: (i) => {
       detail.skillIndex = i;
+      syncDetail(app, state.data, op, detail);
+    },
+    onPreviewBase: () => {
+      previewBase(op, detail);
+      syncDetail(app, state.data, op, detail);
+    },
+    onPreviewMax: () => {
+      previewMax(op, detail);
+      syncDetail(app, state.data, op, detail);
+    },
+    onSetCurrent: () => {
+      detail.matPlan.current = planSnapshot(op, detail);
+      syncDetail(app, state.data, op, detail);
+    },
+    onSetTarget: () => {
+      detail.matPlan.target = planSnapshot(op, detail);
       syncDetail(app, state.data, op, detail);
     },
   };

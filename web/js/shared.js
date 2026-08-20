@@ -33,6 +33,10 @@ const SKILL_ICONS = [
   (id) => `https://raw.githubusercontent.com/yuanyan3060/ArknightsGameResource/main/skill/skill_icon_${id}.png`,
   (id) => `https://raw.githubusercontent.com/Aceship/Arknight-Images/main/skills/skill_icon_${id}.png`,
 ];
+const MATERIAL_ICONS = [
+  (id) => `https://raw.githubusercontent.com/yuanyan3060/ArknightsGameResource/main/item/icon/${id}.png`,
+  (id) => `https://raw.githubusercontent.com/Aceship/Arknight-Images/main/items/${id}.png`,
+];
 
 function chainedImg(urls, cls) {
   const img = document.createElement("img");
@@ -61,6 +65,10 @@ export function portraitEl(id) {
 
 export function skillIconEl(iconId) {
   return chainedImg(SKILL_ICONS.map((fn) => fn(iconId)), "skill-icon");
+}
+
+export function matIconEl(iconId) {
+  return chainedImg(MATERIAL_ICONS.map((fn) => fn(iconId)), "mat-icon");
 }
 
 export function profIconEl(id, cls = "prof-ico") {

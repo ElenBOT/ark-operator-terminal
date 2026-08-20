@@ -22,11 +22,21 @@ SOURCES = {
     "uniequip_table.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/uniequip_table.json",
     "skill_table.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/skill_table.json",
     "gamedata_const.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/gamedata_const.json",
+    "item_table.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/item_table.json",
+    "stage_table.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/stage_table.json",
+    "building_data.json": "https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/zh_CN/gamedata/excel/building_data.json",
     "character_table_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/character_table.json",
     "uniequip_table_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/uniequip_table.json",
     "skill_table_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/skill_table.json",
     "gamedata_const_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/gamedata_const.json",
+    "item_table_tw.json": "https://cdn.jsdelivr.net/gh/ArknightsAssets/ArknightsGamedata@master/tw/gamedata/excel/item_table.json",
 }
+
+# Not on jsDelivr — Penguin Stats' crowd-sourced drop matrix is the only source
+# with numeric drop rates (raw gamedata only has qualitative occPer buckets).
+# No TW dataset exists there, so CN numbers are used as the best available proxy.
+PENGUIN_MATRIX_URL = "https://penguin-stats.io/PenguinStats/api/v2/result/matrix?server=CN"
+PENGUIN_MATRIX_FILE = "penguin_matrix_cn.json"
 
 PROFESSIONS = [
     {"id": "PIONEER", "name": "先鋒"},
@@ -148,6 +158,9 @@ def ensure_raw() -> None:
         if os.path.exists(path) and os.path.getsize(path) > 1000:
             continue
         download(url, path)
+    penguin_path = os.path.join(RAW, PENGUIN_MATRIX_FILE)
+    if not (os.path.exists(penguin_path) and os.path.getsize(penguin_path) > 1000):
+        download(PENGUIN_MATRIX_URL, penguin_path)
 
 
 def load_json(name: str) -> Any:
@@ -342,6 +355,81 @@ def pack_terms() -> dict[str, dict[str, str]]:
     return out
 
 
+def pack_cost(raw_list: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    out = []
+    for item in raw_list or []:
+        if item.get("type") and item["type"] != "MATERIAL":
+            continue
+        iid = item.get("id")
+        if not iid:
+            continue
+        out.append({"id": iid, "count": item.get("count") or 0})
+    return out
+
+
+def pack_materials(
+    ids: set[str],
+    items_cn: dict[str, Any],
+    items_tw: dict[str, Any],
+    workshop_formulas: dict[str, Any],
+    matrix_by_item: dict[str, list[dict[str, Any]]],
+    stages: dict[str, Any],
+) -> dict[str, Any]:
+    """Material metadata for the leveling calculator: name/icon plus how to get it
+    (farm stages with Penguin Stats CN expected-AP-per-item, or a workshop recipe)."""
+    out: dict[str, Any] = {}
+    for iid in ids:
+        info = items_cn.get(iid)
+        if not info:
+            continue
+        tw_info = items_tw.get(iid) or {}
+        name = tw_info.get("name") or convert(info.get("name") or iid)
+
+        craft = None
+        for ref in info.get("buildingProductList") or []:
+            if ref.get("roomType") != "WORKSHOP":
+                continue
+            formula = workshop_formulas.get(str(ref.get("formulaId")))
+            if formula:
+                craft = {
+                    "goldCost": formula.get("goldCost") or 0,
+                    "count": formula.get("count") or 1,
+                    "costs": pack_cost(formula.get("costs")),
+                }
+            break
+
+        drops = []
+        for row in matrix_by_item.get(iid) or []:
+            stage = stages.get(row.get("stageId"))
+            if not stage:
+                continue
+            ap = stage.get("apCost")
+            qty = row.get("quantity") or 0
+            times = row.get("times") or 0
+            if not ap or ap <= 0 or qty <= 0 or times <= 0:
+                continue
+            drops.append(
+                {
+                    "stageId": row["stageId"],
+                    "code": stage.get("code") or row["stageId"],
+                    "name": convert(stage.get("name") or ""),
+                    "apCost": ap,
+                    "apPerItem": round(ap * times / qty, 2),
+                }
+            )
+        drops.sort(key=lambda d: d["apPerItem"])
+
+        out[iid] = {
+            "id": iid,
+            "name": name,
+            "rarity": rarity_of(info.get("rarity")),
+            "iconId": info.get("iconId") or iid,
+            "craft": craft,
+            "drops": drops[:8],
+        }
+    return out
+
+
 def pack_potentials(ranks: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     out = []
     for rank in ranks or []:
@@ -366,6 +454,16 @@ def build() -> dict[str, Any]:
     tw_equip = load_json("uniequip_table_tw.json")
     cn_skills = load_json("skill_table.json")
     tw_skills = load_json("skill_table_tw.json")
+    gconst = load_json("gamedata_const.json")
+    evolve_gold_by_rarity = gconst.get("evolveGoldCost") or []
+    # Per-level EXP/LMD cost depends only on the elite phase (0/1/2), not rarity —
+    # confirmed against real operator maxLevel data: each row's valid (non -1) length
+    # matches the highest maxLevel seen at that phase across every rarity, with no
+    # rarity-indexed reading of these two tables working without contradiction.
+    exp_by_phase = gconst.get("characterExpMap") or []
+    lmd_by_phase = gconst.get("characterUpgradeCostMap") or []
+
+    needed_material_ids: set[str] = {"4001", "2001", "2002", "2003", "2004"}
 
     tw_sub = {
         sid: info.get("subProfessionName") or ""
@@ -396,7 +494,11 @@ def build() -> dict[str, Any]:
         last_trait = trait_entries[-1] if trait_entries else None
         trait = fill_template(last_trait["desc"], last_trait["blackboard"]) if last_trait else convert(strip_tags(trait_cn))
 
+        rarity_val = rarity_of(raw.get("rarity"))
+        gold_row = evolve_gold_by_rarity[rarity_val - 1] if 0 < rarity_val <= len(evolve_gold_by_rarity) else []
+
         phases = []
+        evolve_cost: list[dict[str, Any] | None] = [None, None]
         for i, phase in enumerate(phases_raw):
             frames = phase.get("attributesKeyFrames") or []
             if len(frames) < 1:
@@ -410,8 +512,19 @@ def build() -> dict[str, Any]:
                     "max": pick_stats(frames[-1]),
                 }
             )
+            if 1 <= i <= 2:
+                materials = pack_cost(phase.get("evolveCost"))
+                needed_material_ids.update(m["id"] for m in materials)
+                lmd = gold_row[i - 1] if i - 1 < len(gold_row) else -1
+                evolve_cost[i - 1] = {"materials": materials, "lmd": lmd if isinstance(lmd, (int, float)) and lmd > 0 else 0}
         if not phases:
             continue
+
+        skill_level_cost = []
+        for lv in raw.get("allSkillLvlup") or []:
+            materials = pack_cost(lv.get("lvlUpCost"))
+            needed_material_ids.update(m["id"] for m in materials)
+            skill_level_cost.append({"materials": materials})
 
         trust = {"hp": 0, "atk": 0, "def": 0, "res": 0}
         favor = raw.get("favorKeyFrames") or []
@@ -430,10 +543,21 @@ def build() -> dict[str, Any]:
             sid = slot.get("skillId")
             if not sid:
                 continue
+            mastery_cost = []
+            for cond in slot.get("levelUpCostCond") or []:
+                materials = pack_cost(cond.get("levelUpCost"))
+                needed_material_ids.update(m["id"] for m in materials)
+                mastery_cost.append(
+                    {
+                        "materials": materials,
+                        "unlockElite": phase_of((cond.get("unlockCond") or {}).get("phase")),
+                    }
+                )
             skill_refs.append(
                 {
                     "id": sid,
                     "unlockElite": phase_of((slot.get("unlockCond") or {}).get("phase")),
+                    "masteryCost": mastery_cost,
                 }
             )
         operators[cid] = {
@@ -441,7 +565,7 @@ def build() -> dict[str, Any]:
             "name": name,
             "nameCn": name_cn,
             "nameEn": raw.get("appellation") or "",
-            "rarity": rarity_of(raw.get("rarity")),
+            "rarity": rarity_val,
             "profession": raw["profession"],
             "branchId": raw.get("subProfessionId") or "unknown",
             "position": "近戰" if raw.get("position") == "MELEE" else "遠程",
@@ -458,6 +582,8 @@ def build() -> dict[str, Any]:
             "potentials": pack_potentials(raw.get("potentialRanks")),
             "talents": pack_talents(raw.get("talents"), tw.get("talents")),
             "skillRefs": skill_refs,
+            "evolveCost": evolve_cost,
+            "skillLevelCost": skill_level_cost,
         }
 
     branches_map: dict[str, dict[str, Any]] = {}
@@ -559,6 +685,21 @@ def build() -> dict[str, Any]:
                         used_ranges.add(lv["rangeId"])
     range_out = {rid: range_out[rid] for rid in used_ranges if rid in range_out}
 
+    item_cn_raw = load_json("item_table.json")
+    item_cn = item_cn_raw.get("items") or {}
+    item_tw = (load_json("item_table_tw.json").get("items")) or {}
+    exp_items = {
+        iid: info.get("gainExp") or 0
+        for iid, info in (item_cn_raw.get("expItems") or {}).items()
+    }
+    workshop_formulas = load_json("building_data.json").get("workshopFormulas") or {}
+    stages = load_json("stage_table.json").get("stages") or {}
+    matrix_by_item: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in load_json(PENGUIN_MATRIX_FILE).get("matrix") or []:
+        iid = row.get("itemId")
+        if iid in needed_material_ids:
+            matrix_by_item[iid].append(row)
+
     return {
         "professions": PROFESSIONS,
         "ranges": range_out,
@@ -566,6 +707,9 @@ def build() -> dict[str, Any]:
         "operators": operators,
         "skills": used_skills,
         "terms": pack_terms(),
+        "materials": pack_materials(needed_material_ids, item_cn, item_tw, workshop_formulas, matrix_by_item, stages),
+        "levelTable": {"expByPhase": exp_by_phase, "lmdByPhase": lmd_by_phase},
+        "expItems": exp_items,
     }
 
 
@@ -582,7 +726,8 @@ def main() -> int:
         f"{len(data['branches'])} branches, "
         f"{len(data['skills'])} skills, "
         f"{len(data['ranges'])} ranges, "
-        f"{len(data.get('terms') or {})} terms"
+        f"{len(data.get('terms') or {})} terms, "
+        f"{len(data.get('materials') or {})} materials"
     )
     return 0
 
