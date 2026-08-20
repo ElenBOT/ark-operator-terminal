@@ -13,7 +13,7 @@
 
 - GitHub Pages（下面有步驟）
 - Netlify / Cloudflare Pages 之類，網站根目錄指到 `web/`
-- 本機預覽才需要一個靜態伺服器（雙擊 `啟動.bat`，或任何 Live Server）
+- 本機預覽才需要一個靜態伺服器（雙擊 `local_debug.bat`，或任何 Live Server）
 
 **不要**直接雙擊 `web/index.html`。瀏覽器的 `file://` 不讓頁面 `fetch` JSON。
 
@@ -43,7 +43,7 @@ https://<你的帳號>.github.io/ark-operator-terminal/
 
 | 指令 | 做什麼 |
 |---|---|
-| `啟動.bat` 或 `python scripts\serve.py` | 本機開 http://127.0.0.1:8765/ 預覽 |
+| `local_debug.bat` 或 `python scripts\serve.py` | 本機開 http://127.0.0.1:8765/ 預覽 |
 | `python scripts\build_data.py` | 遊戲更新後，從拆包 JSON 重建 `web/data/app-data.json` |
 
 建資料需要 `opencc-python-reimplemented`（簡轉繁）：
@@ -99,7 +99,7 @@ python -m pip install opencc-python-reimplemented
 
 ```
 方舟/
-  啟動.bat                 可選：本機預覽
+  local_debug.bat                 可選：本機預覽
   .github/workflows/pages.yml  把 web/ 發到 GitHub Pages
   scripts/serve.py         可選：127.0.0.1:8765 靜態站
   scripts/build_data.py    拆包 JSON → web/data/app-data.json

@@ -21,7 +21,7 @@
 python scripts\serve.py
 ```
 
-或雙擊 `啟動.bat`（Windows，會自動找 Python 路徑）。兩者都會：
+或雙擊 `local_debug.bat`（Windows，會自動找 Python 路徑）。兩者都會：
 
 1. 檢查 `web/data/app-data.json` 存不存在，不存在就先跑 `build_data.py` 補一份。
 2. 在 `127.0.0.1:8765`（被佔用會往後找到 8784）開一個沒有快取的靜態伺服器。
@@ -128,7 +128,7 @@ python scripts\build_data.py
 
 - `web/js/shared.js` 新增 `baseStatsAt` / `applyTrust` / `withDps`：把原本在 `app.js`（家族表）跟 `detail.js`（檔案頁）各寫一份、幾乎一樣的精英化／等級數值內插邏輯合成一份共用函式。行為沒變（已用瀏覽器實測家族表跟檔案頁在同一幹員、同精英化/等級/信賴下數值一致）。
 - `scripts/build_data.py`：`SOURCES` 補上 `gamedata_const.json`／`gamedata_const_tw.json`，修掉上面提到的術語資料缺口。
-- `啟動.bat`：訊息換成繁中；**修掉一個實際會炸的 bug**——檔案原本是純 LF 換行，混合 `chcp 65001` 使用時會讓 cmd.exe 的批次檔解析器錯位（連完全沒改過的英文 PY 偵測區塊都會被拆成一堆「不是內部或外部命令」的錯誤，甚至誤觸發 Python 直譯器互動模式）。已轉成 CRLF 並實機驗證（`Start-Process` 起這個檔案，確認繁中訊息正常顯示、伺服器正常啟動、瀏覽器正常打開頁面）。
+- `local_debug.bat`：訊息換成繁中；**修掉一個實際會炸的 bug**——檔案原本是純 LF 換行，混合 `chcp 65001` 使用時會讓 cmd.exe 的批次檔解析器錯位（連完全沒改過的英文 PY 偵測區塊都會被拆成一堆「不是內部或外部命令」的錯誤，甚至誤觸發 Python 直譯器互動模式）。已轉成 CRLF 並實機驗證（`Start-Process` 起這個檔案，確認繁中訊息正常顯示、伺服器正常啟動、瀏覽器正常打開頁面）。
 
 ## 養成材料計算機（新增功能）
 
