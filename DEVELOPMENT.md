@@ -202,3 +202,12 @@ python scripts\build_data.py
 - `OCC_PER` 字典跟 `.occ-tag*` 這組 CSS 現在完全沒有任何程式碼在用，直接刪掉了，不留死代碼。
 - **但 `occPer` 沒有從資料管線（`build_data.py`）拿掉**——它還在 `data.materials[id].drops[].occPer` 裡，只是前端目前沒有畫面在讀它。這是刻意的：資料本身不貴（只是個字串），拆包 `stageDropList` 反查的邏輯也不複雜，留著給以後可能想再用（例如某天想同時顯示兩種資訊）。如果確定以後都不會再用，要清的話記得 `build_data.py` 的 `pack_materials()` 裡也有一段 `occ_by_stage` 反查邏輯要一起拿掉。
 - 材料明細關卡表跟刷圖計畫的關卡表，下面都各自加了一行小字（`.mat-drop-note`）註明「本資料來自企鵝物流社群統計，僅供參考，非官方數值」——這兩個表其實是同一份 Penguin Stats 資料的兩種呈現方式，所以提醒文字幾乎一樣，只是措辭配合各自的情境（一個講「掉落」，一個講「理智花費」）。
+
+### 單一材料的刷圖計畫（彈窗版）
+
+材料明細標題多了一顆「刷圖計畫 ›」，跟「合成表 ›」並排。這不是新演算法——`openMaterialPlanPopover(data, id, maxCount, anchorEl)` 就是把 `planFarmStrategy(data, { [id]: n })` 包一層彈窗殼，`n` 只有一個材料，等於全域那顆「刷圖計畫」按鈕的單材料版本，`renderFarmPlanHtml` 這個渲染函式兩邊共用，沒有另外寫一份。
+
+- `maxCount` 是「目前這個材料還差多少」，來自 `count`（`materialNode` 遞迴組出來的、這一列實際顯示的 `×N`）。這個 `count` 現在要一路往下傳：`materialNode` 點擊時把它交給 `selectMaterial(..., count)`，存進 `detail.selectedMaterialCount`；`syncMaterialsDock` 重繪時，如果被選中的材料還在頂層 `counts` 裡就優先用**當下重算**的新值（`counts[id]`），只有選到的是拆分揭露出來的巢狀材料（本來就不在 `counts` 裡）才退回用點擊當下記住的 `selectedMaterialCount`——頂層材料要盡量拿新鮮值，巢狀材料沒有更好的來源，只能用點擊當下那個。
+- 彈窗裡的數量輸入框（沿用既有的 `.step-btn`／`.step-input` 那組樣式，跟等級/信賴輸入是同一顆元件語言）**上限鎖在 `maxCount`**，不能調更高——這欄位語意是「我還缺多少」，不是「我想要多少」，調更高沒有意義。改變數量會即時重算並重繪 `.mat-plan-popover-content`，不用重新開彈窗。
+- 沒有另外開一條 popover 堆疊：`openMaterialPlanPopover` 直接複用既有的 `popoverStack`／`closePopoversFrom`（塞在 index 0），所以開這個彈窗會把還開著的合成表遞迴彈窗關掉，反過來也一樣——同一時間畫面上最多只有一個浮動小面板，不會兩個彈窗疊在一起搶位置。
+- 彈窗本體套用既有的 `.craft-popover` 樣式，另外用 `.mat-plan-popover` 加大寬高（`min(380px, ...)` / `min(480px, ...)`）——因為刷圖計畫的關卡表通常比合成配方清單寬，原本 260px 的彈窗塞不下。

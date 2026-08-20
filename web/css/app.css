@@ -897,6 +897,23 @@ body.is-detail #app { padding-right: 84px; }
   border: 1px solid var(--gold-dim);
   box-shadow: var(--shadow);
 }
+/* The plan content (a full stage table, sometimes craft steps too) needs more
+   room than a flat ingredient list. */
+.craft-popover.mat-plan-popover {
+  width: min(380px, calc(100vw - 16px));
+  max-height: min(480px, calc(100vh - 16px));
+}
+.mat-plan-qty-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.mat-plan-qty-row .step-input { max-width: 56px; }
+.mat-plan-popover-content { flex: 1 1 auto; min-height: 0; }
 .craft-popover-head {
   flex: 0 0 auto;
   display: flex;

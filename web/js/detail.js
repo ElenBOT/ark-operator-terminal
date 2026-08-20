@@ -59,6 +59,7 @@ export function createDetailState(op) {
     // Both default to the same (max) snapshot, so the material list starts empty.
     matPlan: { current: maxSnapshot(), target: maxSnapshot() },
     selectedMaterial: null,
+    selectedMaterialCount: null,
     showingPlan: false,
     // Material ids currently decomposed into their craft ingredients in the list.
     expandedMaterials: new Set(),
@@ -464,7 +465,13 @@ function syncMaterialsDock(root, data, op, detail) {
   if (detail.showingPlan) {
     renderFarmPlan(root, data, counts);
   } else {
-    renderMaterialDetail(root, data, detail.selectedMaterial);
+    // Prefer the freshly-recomputed top-level count when available; a selected
+    // decomposed sub-ingredient isn't a key of `counts` at all, so fall back to
+    // whatever was captured at the moment it was clicked (see selectMaterial).
+    const selectedCount = detail.selectedMaterial
+      ? counts[detail.selectedMaterial] ?? detail.selectedMaterialCount
+      : null;
+    renderMaterialDetail(root, data, detail.selectedMaterial, selectedCount);
   }
 }
 
@@ -482,8 +489,9 @@ function ensureDockExpanded(root) {
   }
 }
 
-function selectMaterial(root, data, op, detail, id) {
+function selectMaterial(root, data, op, detail, id, count) {
   detail.selectedMaterial = detail.selectedMaterial === id ? null : id;
+  detail.selectedMaterialCount = count;
   detail.showingPlan = false;
   if (detail.selectedMaterial) ensureDockExpanded(root);
   // The stage/craft table needs real width to read, so full re-sync (not just
@@ -517,7 +525,7 @@ function materialNode(root, data, op, detail, id, count, depth = 0) {
   n.className = "mat-chip-count";
   n.textContent = `×${formatCount(count)}`;
   btn.append(label, n);
-  btn.addEventListener("click", () => selectMaterial(root, data, op, detail, id));
+  btn.addEventListener("click", () => selectMaterial(root, data, op, detail, id, count));
   row.appendChild(btn);
 
   if (canSplit) {
@@ -561,7 +569,7 @@ function materialNode(root, data, op, detail, id, count, depth = 0) {
   return node;
 }
 
-function renderMaterialDetail(root, data, id) {
+function renderMaterialDetail(root, data, id, count) {
   const titleEl = root.querySelector('[data-slot="mat-detail-title"]');
   const bodyEl = root.querySelector('[data-slot="mat-detail-body"]');
   if (!titleEl || !bodyEl) return;
@@ -587,6 +595,15 @@ function renderMaterialDetail(root, data, id) {
     craftBtn.title = "看這個材料怎麼合成";
     craftBtn.addEventListener("click", () => openCraftPopover(data, id, craftBtn, 0));
     titleEl.appendChild(craftBtn);
+  }
+  if ((info?.drops?.length || info?.craft) && count > 0) {
+    const planBtn = document.createElement("button");
+    planBtn.type = "button";
+    planBtn.className = "craft-open-btn";
+    planBtn.textContent = "刷圖計畫 ›";
+    planBtn.title = "只針對這個材料排刷圖／合成計畫";
+    planBtn.addEventListener("click", () => openMaterialPlanPopover(data, id, count, planBtn));
+    titleEl.appendChild(planBtn);
   }
   bodyEl.innerHTML = materialDetailHtml(data, info);
 }
@@ -1178,6 +1195,81 @@ function craftIngredientRow(data, cost, level) {
     row.addEventListener("click", () => openCraftPopover(data, cost.id, row, level + 1));
   }
   return row;
+}
+
+// Single-material version of the "刷圖計畫" button: same planFarmStrategy()
+// used for the whole current->target gap, just called with one entry. Shares
+// the popoverStack with the craft-recipe drill-down (level 0) — opening this
+// closes any open recipe popover and vice versa, so at most one floating panel
+// is ever up at a time.
+function openMaterialPlanPopover(data, id, maxCount, anchorEl) {
+  closePopoversFrom(0);
+  const info = data.materials[id];
+  const pop = document.createElement("div");
+  pop.className = "craft-popover mat-plan-popover";
+  const head = document.createElement("div");
+  head.className = "craft-popover-head";
+  head.appendChild(matIconEl(info?.iconId || id));
+  const name = document.createElement("b");
+  name.textContent = info?.name || id;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "craft-popover-close";
+  close.textContent = "×";
+  close.title = "關閉";
+  close.addEventListener("click", () => closePopoversFrom(0));
+  head.append(name, close);
+
+  const body = document.createElement("div");
+  body.className = "craft-popover-body";
+  const qtyRow = document.createElement("div");
+  qtyRow.className = "mat-plan-qty-row";
+  const qtyLabel = document.createElement("span");
+  qtyLabel.className = "ctrl-k";
+  qtyLabel.textContent = "需要數量";
+  const minus = document.createElement("button");
+  minus.type = "button";
+  minus.className = "step-btn";
+  minus.textContent = "−";
+  const qtyInput = document.createElement("input");
+  qtyInput.type = "text";
+  qtyInput.inputMode = "numeric";
+  qtyInput.className = "step-input num";
+  const plus = document.createElement("button");
+  plus.type = "button";
+  plus.className = "step-btn";
+  plus.textContent = "+";
+  const hint = document.createElement("span");
+  hint.className = "ctrl-v";
+  hint.textContent = `/${maxCount}`;
+  const planBody = document.createElement("div");
+  planBody.className = "mat-plan-popover-content";
+
+  // Capped at maxCount — this is "I still need N", not "give me extra", so
+  // there's no reason to plan for more than what's actually left to obtain.
+  const apply = (raw) => {
+    const n = Math.max(1, Math.min(maxCount, Math.round(Number(raw)) || 1));
+    qtyInput.value = String(n);
+    planBody.innerHTML = renderFarmPlanHtml(data, planFarmStrategy(data, { [id]: n }));
+  };
+  minus.addEventListener("click", () => apply(Number(qtyInput.value) - 1));
+  plus.addEventListener("click", () => apply(Number(qtyInput.value) + 1));
+  qtyInput.addEventListener("change", () => apply(qtyInput.value));
+  qtyInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      apply(qtyInput.value);
+      qtyInput.blur();
+    }
+  });
+
+  qtyRow.append(qtyLabel, minus, qtyInput, plus, hint);
+  body.append(qtyRow, planBody);
+  pop.append(head, body);
+  document.body.appendChild(pop);
+  apply(maxCount);
+  positionPopover(pop, anchorEl);
+  popoverStack[0] = pop;
+  popoverStack.length = 1;
 }
 
 function currentSkillLevel(data, op, detail) {
