@@ -801,7 +801,8 @@ body.is-detail #app { padding-right: 84px; }
   padding: 5px 2px;
 }
 .mat-chip:hover, .mat-chip.open { border-color: var(--gold-dim); }
-.mat-chip.dimmed { opacity: 0.55; }
+.mat-chip.dimmed { opacity: 0.55; justify-content: center; text-align: center; }
+.mat-chip.dimmed .mat-chip-label { flex: 0 0 auto; }
 .mat-split-btn {
   flex: 0 0 auto;
   width: 22px;
@@ -815,12 +816,34 @@ body.is-detail #app { padding-right: 84px; }
 .mat-split-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
 .mat-node-children {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
   margin: 6px 0 2px 14px;
-  padding: 6px;
-  border: 1px dashed var(--line-strong);
+  padding: 8px;
+  border: 1px solid var(--line-strong);
 }
+/* Nested split levels get their own tint so it's obvious at a glance how many
+   layers deep a given row is — cycles through 4 accent colors then repeats. */
+.mat-node-children.depth-1 {
+  background: color-mix(in srgb, var(--PIONEER) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--PIONEER) 45%, var(--line));
+}
+.mat-node-children.depth-2 {
+  background: color-mix(in srgb, var(--CASTER) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--CASTER) 45%, var(--line));
+}
+.mat-node-children.depth-3 {
+  background: color-mix(in srgb, var(--SUPPORT) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--SUPPORT) 45%, var(--line));
+}
+.mat-node-children.depth-4 {
+  background: color-mix(in srgb, var(--SNIPER) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--SNIPER) 45%, var(--line));
+}
+/* Children stack full-width and left-aligned (the default chip layout) instead
+   of the 2-column grid used for the plain top-level shopping list — makes a
+   split group read as "here's the breakdown" rather than another grid. */
+.mat-dock.expanded .mat-node-children > .mat-node { width: 100%; }
 .mat-dock:not(.expanded) .mat-split-btn,
 .mat-dock:not(.expanded) .mat-node-children { display: none; }
 .mat-icon { width: 26px; height: 26px; object-fit: contain; background: #0e1419; flex: 0 0 auto; }

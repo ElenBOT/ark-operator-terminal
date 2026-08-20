@@ -180,3 +180,11 @@ python scripts\build_data.py
 - `materialNode(root, data, op, detail, id, count)`（取代了原本的 `materialChip`）遞迴畫每一列：本體是原本的 `.mat-chip`（選取後把明細顯示到下面共用面板，邏輯搬進 `selectMaterial()`），有 `craft` 的話多一顆 `.mat-split-btn`（+/−）；`detail.expandedMaterials.has(id)` 為真時，本體變暗（`.dimmed`）、按鈕變「−」，並在下面接一個 `.mat-node-children`（虛線框），裡面遞迴呼叫 `materialNode` 畫每個原料，數量算法跟 `planFarmStrategy` 的 worklist 那段共用同一個公式（`Math.ceil(count / perOutput) * ingredientCount`），兩邊應該永遠對得上。
 - 點 +/− 純粹改 `expandedMaterials` 再整個呼叫 `syncMaterialsDock` 重繪，沒有另外做局部 DOM patch——這個 dock 本來每次都整個重繪（`list.replaceChildren()`），跟著這個既有模式走，不要為了這顆按鈕另外設計一套局部更新，會跟其他地方的重繪邏輯不一致。
 - 只有展開狀態（`.mat-dock.expanded`）才顯示 +/− 跟拆開的框；收合窄版（72px）完全沒有空間放，CSS 直接 `display:none` 藏起來，不是不能拆，是收合模式本來就不做這件事。
+
+### 使用者實測後的修正：拆開的子材料點了沒反應
+
+**真的有 bug，不是誤會**：`syncMaterialsDock` 裡有一行 `if (detail.selectedMaterial && !(detail.selectedMaterial in counts)) detail.selectedMaterial = null;`，`counts` 只有**頂層**需要的材料（`planMaterials` 的回傳值），不包含拆分功能揭露出來的子材料。所以流程是：點一個子材料 → `selectMaterial` 設定 `detail.selectedMaterial = id` → 呼叫 `syncMaterialsDock` → 這行守衛因為 `id` 不在 `counts` 裡就把它清成 `null` → 明細面板顯示空狀態，看起來像「這材料沒有取得方式」，但其實只是選取被自己清掉了。改成檢查 `id in data.materials`（材料資料庫本身，不分是不是頂層需求）就對了。**以後改這段邏輯，記得材料清單已經不只是「當前差額的頂層材料」了，任何跟「這個 id 合不合法」有關的檢查都要對 `data.materials` 查，不要對 `counts` 查。**
+
+順便把「只能合成」的提示文字從「點上面「合成表」看怎麼合成」改成「請按材料旁的「+」拆分後查詢」，指向新的原地拆解功能而不是彈窗功能（兩個功能都還在，只是文案優先引導去用比較新、比較整合的那個）。
+
+材料清單版面也跟著調整：一個材料被拆開後，本體（灰色那顆）改成站滿一行＋置中（`.mat-chip.dimmed { justify-content:center }`，同時把 `.mat-chip-label` 的 `flex` 從 `1 1 auto` 蓋成 `0 0 auto`，不然置中沒有用——label 本來會撐滿剩餘空間，`justify-content` 就沒東西好置中了）；拆出來的原料改成一欄直排、站滿整行、靠左對齊（`.mat-node-children` 從 `flex-wrap` 的兩欄網格改成 `flex-direction:column`），跟框外沒被拆開的頂層材料（維持兩欄網格）做出區隔。每一層拆開的框用 `depth-N` class 上不同底色（借用職業色 `--PIONEER`／`--CASTER`／`--SUPPORT`／`--SNIPER` 配 `color-mix` 調淡，不是另外定義一組新顏色），第一層綠、第二層紫，一眼就看得出巢狀了幾層。

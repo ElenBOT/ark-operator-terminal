@@ -453,7 +453,12 @@ function syncMaterialsDock(root, data, op, detail) {
     renderMaterialDetail(root, data, null);
     return;
   }
-  if (detail.selectedMaterial && !(detail.selectedMaterial in counts)) detail.selectedMaterial = null;
+  // Only clear the selection when it's a genuinely unknown id — NOT just "not a
+  // top-level need" — otherwise selecting a decomposed sub-ingredient (which is
+  // never a key of `counts`, only ever revealed via the +/- split) would get
+  // wiped out the instant this same sync runs, showing nothing in the detail
+  // panel even though that material has perfectly good drop/craft data.
+  if (detail.selectedMaterial && !(detail.selectedMaterial in data.materials)) detail.selectedMaterial = null;
   ids.sort((a, b) => (data.materials[b]?.rarity || 0) - (data.materials[a]?.rarity || 0));
   for (const id of ids) list.appendChild(materialNode(root, data, op, detail, id, counts[id]));
   if (detail.showingPlan) {
@@ -490,7 +495,7 @@ function selectMaterial(root, data, op, detail, id) {
 // decomposes it into its own craft ingredients (recursively) so the user can
 // see how the raw materials at the bottom of the chain are actually farmed,
 // without leaving the list to open a separate popover for every step.
-function materialNode(root, data, op, detail, id, count) {
+function materialNode(root, data, op, detail, id, count, depth = 0) {
   const info = data.materials[id];
   const canSplit = !!info?.craft;
   const expanded = canSplit && detail.expandedMaterials.has(id);
@@ -534,9 +539,9 @@ function materialNode(root, data, op, detail, id, count) {
   if (expanded) {
     const times = Math.ceil(count / (info.craft.count || 1));
     const children = document.createElement("div");
-    children.className = "mat-node-children";
+    children.className = `mat-node-children depth-${Math.min(depth + 1, 4)}`;
     for (const c of info.craft.costs || []) {
-      children.appendChild(materialNode(root, data, op, detail, c.id, c.count * times));
+      children.appendChild(materialNode(root, data, op, detail, c.id, c.count * times, depth + 1));
     }
     node.appendChild(children);
   }
@@ -663,7 +668,7 @@ function dropTableHtml(drops) {
 function materialDetailHtml(data, info) {
   if (!info) return `<p class="muted">沒有已知取得方式。</p>`;
   if (info.drops && info.drops.length) return dropTableHtml(info.drops);
-  if (info.craft) return `<p class="muted">沒有直接掉落，點上面「合成表」看怎麼合成。</p>`;
+  if (info.craft) return `<p class="muted">沒有直接掉落，請按材料旁的「+」拆分後查詢。</p>`;
   return `<p class="muted">至資源收集關卡獲取。</p>`;
 }
 
