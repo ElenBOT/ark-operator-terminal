@@ -780,7 +780,10 @@ body.is-detail #app { padding-right: 84px; }
 .mat-empty { font-size: 12px; padding: 8px 2px; line-height: 1.5; }
 .mat-node { display: flex; flex-direction: column; min-width: 0; }
 .mat-dock.expanded .mat-node { width: calc(50% - 6px); }
-.mat-dock.expanded .mat-node.expanded { width: 100%; }
+/* Only a top-level material goes full-width when split — nested ones inside a
+   .mat-node-children get their width from the depth taper below instead, even
+   when they're themselves further split (see .mat-node-children.depth-N). */
+.mat-dock.expanded .mat-dock-list > .mat-node.expanded { width: 100%; }
 .mat-chip-wrap { display: flex; align-items: stretch; gap: 4px; min-width: 0; }
 .mat-chip {
   display: flex;
@@ -843,10 +846,18 @@ body.is-detail #app { padding-right: 84px; }
   border-color: color-mix(in srgb, var(--SNIPER) 45%, var(--line));
 }
 .mat-node-children { display: flex; flex-direction: column; gap: 6px; }
-/* Ingredients stack one-per-line (left-aligned, the default chip layout) but
-   only take half the width — visibly narrower than the plain top-level
-   shopping-list items, which is its own cue that these were split out. */
-.mat-dock.expanded .mat-node-children > .mat-node { width: 50%; }
+/* Ingredients stack one-per-line (left-aligned, the default chip layout), each
+   nesting depth just a bit narrower than the last — a LINEAR taper, not the
+   halve-every-level scheme this replaced (that hit 1/2, 1/4, 1/8... which reads
+   as "shrinking fast" rather than "one step deeper"). Target width relative to
+   the full list row: 90% / 77% / 63% / 50% at depth 1-4 (max real craft-chain
+   depth in the built dataset is 4). Percentages are relative to the immediate
+   parent though, which is already sitting at the previous depth's width, so
+   each rule below is (this depth's target) / (previous depth's target). */
+.mat-node-children.depth-1 > .mat-node { width: 90%; } /* 90/100 */
+.mat-node-children.depth-2 > .mat-node { width: 85.6%; } /* 77/90 */
+.mat-node-children.depth-3 > .mat-node { width: 81.8%; } /* 63/77 */
+.mat-node-children.depth-4 > .mat-node { width: 79.4%; } /* 50/63 */
 .mat-dock:not(.expanded) .mat-split-btn,
 .mat-dock:not(.expanded) .mat-node-children { display: none; }
 .mat-dock:not(.expanded) .mat-node-frame { background: none; border: none; padding: 0; margin: 0; }
@@ -873,14 +884,8 @@ body.is-detail #app { padding-right: 84px; }
 .mat-drop-table { width: 100%; min-width: 260px; border-collapse: collapse; font-size: 11px; }
 .mat-drop-table th, .mat-drop-table td { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--line); }
 .mat-drop-table th:first-child, .mat-drop-table td:first-child { text-align: left; }
-.mat-drop-table th:nth-child(2), .mat-drop-table td:nth-child(2) { text-align: center; }
 .mat-drop-table tr.best td { color: var(--up); font-weight: 600; }
-.occ-tag { font-size: 11px; padding: 1px 6px; border: 1px solid; white-space: nowrap; }
-.occ-tag.occ-always { color: var(--gold); border-color: var(--gold-dim); }
-.occ-tag.occ-almost { color: #6fd08c; border-color: #3a6b4a; }
-.occ-tag.occ-often { color: var(--ink-dim); border-color: var(--line-strong); }
-.occ-tag.occ-usual { color: #e0a24c; border-color: #7a5a2a; }
-.occ-tag.occ-sometimes { color: #e07a72; border-color: #7a3a34; }
+.mat-drop-note { margin: 6px 0 0; font-size: 10px; line-height: 1.4; }
 .craft-popover {
   position: fixed;
   z-index: 90;

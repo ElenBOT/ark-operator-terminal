@@ -539,12 +539,17 @@ function materialNode(root, data, op, detail, id, count, depth = 0) {
     // The frame encloses the dimmed parent row too (not just its ingredients),
     // so the whole "this got split" group — original included — reads as one
     // tinted block instead of a plain row sitting above an unrelated-looking box.
+    // frameDepth also drives the linear width taper below (see CSS) — max real
+    // craft-chain depth in the current dataset is 4, verified against the built
+    // data, so depths past that just repeat depth-4's ratio rather than being
+    // literally correct for a 5th level that doesn't currently exist.
+    const frameDepth = Math.min(depth + 1, 4);
     const frame = document.createElement("div");
-    frame.className = `mat-node-frame depth-${Math.min(depth + 1, 4)}`;
+    frame.className = `mat-node-frame depth-${frameDepth}`;
     frame.appendChild(row);
     const times = Math.ceil(count / (info.craft.count || 1));
     const children = document.createElement("div");
-    children.className = "mat-node-children";
+    children.className = `mat-node-children depth-${frameDepth}`;
     for (const c of info.craft.costs || []) {
       children.appendChild(materialNode(root, data, op, detail, c.id, c.count * times, depth + 1));
     }
@@ -631,6 +636,7 @@ function renderFarmPlanHtml(data, plan) {
           <thead><tr><th>關卡</th><th>次數</th><th>理智</th><th>預期獲得</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
+        <p class="mat-drop-note muted">※ 本計畫的理智花費依企鵝物流（Penguin Stats）社群統計資料估算，僅供參考，非官方數值。</p>
       </div>`);
   }
   if (plan.unresolved.length) {
@@ -641,23 +647,14 @@ function renderFarmPlanHtml(data, plan) {
   return parts.join("");
 }
 
-const OCC_PER = {
-  ALWAYS: { label: "固定掉落", cls: "occ-always" },
-  ALMOST: { label: "常見掉落", cls: "occ-almost" },
-  OFTEN: { label: "機率掉落", cls: "occ-often" },
-  USUAL: { label: "小機率", cls: "occ-usual" },
-  SOMETIMES: { label: "罕見", cls: "occ-sometimes" },
-};
-
 function dropTableHtml(drops) {
   const rows = drops
     .map((d, i) => {
-      const occ = OCC_PER[d.occPer];
-      const occHtml = occ ? `<span class="occ-tag ${occ.cls}">${occ.label}</span>` : `<span class="muted">—</span>`;
+      const qtyPerRun = d.apPerItem > 0 ? (d.apCost / d.apPerItem).toFixed(2) : "—";
       return `
       <tr class="${i === 0 ? "best" : ""}" data-stage="${esc(d.stageId)}">
         <td>${esc(d.code)}</td>
-        <td>${occHtml}</td>
+        <td class="num">${qtyPerRun}</td>
         <td class="num">${d.apCost}</td>
         <td class="num">${d.apPerItem}</td>
       </tr>`;
@@ -665,9 +662,10 @@ function dropTableHtml(drops) {
     .join("");
   return `
       <table class="mat-drop-table">
-        <thead><tr><th>關卡</th><th>掉落機率</th><th>理智/關卡</th><th>理智(期望值)/材料</th></tr></thead>
+        <thead><tr><th>關卡</th><th>掉落量/次</th><th>理智/關卡</th><th>理智(期望值)/材料</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>`;
+      </table>
+      <p class="mat-drop-note muted">※ 本掉落數據來自企鵝物流（Penguin Stats）社群統計資料，僅供參考，非官方數值。</p>`;
 }
 
 // Craft recipes now live in the popover opened by the "合成表" button next to

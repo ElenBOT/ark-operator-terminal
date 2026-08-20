@@ -90,8 +90,7 @@ python -m pip install opencc-python-reimplemented
 - CN 比台服新：台服還沒有的卡用簡轉繁名
 - 阿米婭目前資料裡只有術師形態
 - 1 星機器人沒有主動技能（檔案頁仍有「普通攻擊」）
-- 材料計算機：理智期望值來自企鵝物流 **CN** 矩陣（企鵝物流沒有台服資料，這是唯一可行的數字來源）；經驗換算成書本數量是貪心法、非無浪費最佳解；關卡效率清單只留前 8 筆；沒有另外核對關卡是否還開放刷取
-- 掉落機率標籤（固定掉落／常見掉落…）來自拆包 `stageDropList`，約兩成關卡沒登記，顯示「—」
+- 材料計算機：理智期望值、關卡掉落量都來自企鵝物流 **CN** 矩陣（企鵝物流沒有台服資料，這是唯一可行的數字來源，材料明細表下方會標註出處）；經驗換算成書本數量是貪心法、非無浪費最佳解；關卡效率清單只留前 8 筆；沒有另外核對關卡是否還開放刷取
 - 刷圖計畫是**貪心演算法**，不是真正的最佳化解（那是一個線性規劃問題）；每次「挑目前性價比最高的關卡、刷到能清掉的材料清掉為止」地疊代，多數情況下夠用，但不保證是理論上理智花費最少的組合
 
 ---
@@ -150,7 +149,7 @@ python -m pip install opencc-python-reimplemented
 - `operators[id].skillLevelCost`：長度 6 陣列（技能等級 1→2 … 6→7），每項 `{materials}`。
 - `levelTable.expByPhase` / `lmdByPhase`：**依精英化階段（0/1/2）索引，不是依星級**——這點違反直覺，是拿真實幹員 `maxLevel` 資料反推驗證過的，不要改回「依星級查表」。每個階段的等級都從 1 重新查。
 - `expItems`：`{ itemId: gainExp }`，四階「作戰記錄」書換算表，`materials.js` 的 `expItems Breakdown` 拿去把經驗總量貪心換算成書本數。
-- `materials[id]`：`{ name, rarity, iconId, craft, drops }`。只收會被用到的材料（約 92 種），不是遊戲全部材料。`craft` 是加工站配方（`{goldCost, count, costs}`）或 `null`；`drops` 是依理智期望值排序的關卡清單（`{stageId, code, name, apCost, apPerItem, occPer}`），最多 8 筆；`occPer` 是遊戲拆包原生的掉落機率分級（`ALWAYS`/`ALMOST`/`OFTEN`/`USUAL`/`SOMETIMES`），約兩成的列沒有（拆包沒登記），前端顯示「—」；`craft`／`drops` 兩者皆無就是「沒有已知取得方式」。
+- `materials[id]`：`{ name, rarity, iconId, craft, drops }`。只收會被用到的材料（約 92 種），不是遊戲全部材料。`craft` 是加工站配方（`{goldCost, count, costs}`）或 `null`；`drops` 是依理智期望值排序的關卡清單（`{stageId, code, name, apCost, apPerItem, occPer}`），最多 8 筆；`craft`／`drops` 兩者皆無就是「至資源收集關卡獲取」（目前固定是龍門幣＋8 個職業雙晶片這 9 種材料）。前端關卡表的「掉落量/次」是拿 `apCost/apPerItem` 現算的企鵝物流期望值，不是 `occPer`；`occPer` 是遊戲拆包自己的掉落機率分級（`ALWAYS`/`ALMOST`/`OFTEN`/`USUAL`/`SOMETIMES`），資料還在（給以後要用的話），但目前沒有畫面在顯示它。
 - `stageDrops[stageId]`：`[{id, qty}]`，這關會掉落哪些（在我們 92 種材料範圍內的）材料、單次期望值各是多少，用來做關卡列的滑鼠提示；跟 `materials[id].drops` 是同一份企鵝物流資料的兩種切法（一個是「材料→關卡」，一個是「關卡→材料」），沒有額外去下載。
 
 攻擊範圍：
