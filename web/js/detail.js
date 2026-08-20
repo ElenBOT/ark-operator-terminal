@@ -534,16 +534,24 @@ function materialNode(root, data, op, detail, id, count, depth = 0) {
     });
     row.appendChild(splitBtn);
   }
-  node.appendChild(row);
 
   if (expanded) {
+    // The frame encloses the dimmed parent row too (not just its ingredients),
+    // so the whole "this got split" group — original included — reads as one
+    // tinted block instead of a plain row sitting above an unrelated-looking box.
+    const frame = document.createElement("div");
+    frame.className = `mat-node-frame depth-${Math.min(depth + 1, 4)}`;
+    frame.appendChild(row);
     const times = Math.ceil(count / (info.craft.count || 1));
     const children = document.createElement("div");
-    children.className = `mat-node-children depth-${Math.min(depth + 1, 4)}`;
+    children.className = "mat-node-children";
     for (const c of info.craft.costs || []) {
       children.appendChild(materialNode(root, data, op, detail, c.id, c.count * times, depth + 1));
     }
-    node.appendChild(children);
+    frame.appendChild(children);
+    node.appendChild(frame);
+  } else {
+    node.appendChild(row);
   }
   return node;
 }

@@ -187,4 +187,4 @@ python scripts\build_data.py
 
 順便把「只能合成」的提示文字從「點上面「合成表」看怎麼合成」改成「請按材料旁的「+」拆分後查詢」，指向新的原地拆解功能而不是彈窗功能（兩個功能都還在，只是文案優先引導去用比較新、比較整合的那個）。
 
-材料清單版面也跟著調整：一個材料被拆開後，本體（灰色那顆）改成站滿一行＋置中（`.mat-chip.dimmed { justify-content:center }`，同時把 `.mat-chip-label` 的 `flex` 從 `1 1 auto` 蓋成 `0 0 auto`，不然置中沒有用——label 本來會撐滿剩餘空間，`justify-content` 就沒東西好置中了）；拆出來的原料改成一欄直排、站滿整行、靠左對齊（`.mat-node-children` 從 `flex-wrap` 的兩欄網格改成 `flex-direction:column`），跟框外沒被拆開的頂層材料（維持兩欄網格）做出區隔。每一層拆開的框用 `depth-N` class 上不同底色（借用職業色 `--PIONEER`／`--CASTER`／`--SUPPORT`／`--SNIPER` 配 `color-mix` 調淡，不是另外定義一組新顏色），第一層綠、第二層紫，一眼就看得出巢狀了幾層。
+材料清單版面也跟著調整：一個材料被拆開後，本體（灰色那顆）改成站滿一行＋置中（`.mat-chip.dimmed { justify-content:center }`，同時把 `.mat-chip-label` 的 `flex` 從 `1 1 auto` 蓋成 `0 0 auto`，不然置中沒有用——label 本來會撐滿剩餘空間，`justify-content` 就沒東西好置中了）；拆出來的原料一欄直排、靠左對齊。每一層拆開的框（`.mat-node-frame`，用 `depth-N` class 上不同底色，借用職業色 `--PIONEER`／`--CASTER`／`--SUPPORT`／`--SNIPER` 配 `color-mix` 調淡，不是另外定義一組新顏色）**包住灰色本體＋它拆出來的原料**，不是只框原料；原料的寬度固定抓容器 50%（`.mat-node-children > .mat-node { width:50% }`），跟框外沒被拆開的頂層材料（也是兩欄網格但用滿整個容器寬度）在觀感上做出區隔——這兩點是使用者看過第一版（框只包原料、原料撐滿整行）之後又提出的調整，說明拆解框的視覺規則還在演化，改這塊時留意一下最新反饋是哪個版本。
