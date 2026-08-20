@@ -705,6 +705,23 @@ body.is-detail #app { padding-right: 84px; }
 }
 .mat-dock.expanded .mat-dock-summary { display: block; }
 .mat-dock-summary:empty { display: none; }
+.mat-dock-actions {
+  display: none;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.mat-dock.expanded .mat-dock-actions { display: block; }
+.mat-plan-btn {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 5px 8px;
+  cursor: pointer;
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+.mat-plan-btn:hover { border-color: var(--gold-dim); color: var(--ink); }
 .mat-dock-list {
   flex: 1 1 auto;
   min-height: 0;
@@ -807,6 +824,29 @@ body.is-detail #app { padding-right: 84px; }
   padding: 1px 6px;
   color: var(--ink-dim);
 }
+
+tr[data-stage] { cursor: help; }
+
+.plan-section { margin-bottom: 10px; }
+.plan-section-h { font-size: 11px; color: var(--ink-mute); margin-bottom: 4px; }
+.plan-craft-row { font-size: 11px; color: var(--ink-dim); line-height: 1.6; }
+.plan-craft-row b { color: var(--ink); font-weight: 600; }
+.plan-stage-table { width: 100%; min-width: 260px; border-collapse: collapse; font-size: 11px; }
+.plan-stage-table th, .plan-stage-table td { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--line); }
+.plan-stage-table th:first-child, .plan-stage-table td:first-child { text-align: left; }
+.plan-stage-table th:last-child, .plan-stage-table td:last-child { text-align: left; color: var(--ink-dim); }
+.plan-unresolved { font-size: 11px; color: var(--down); line-height: 1.5; }
+
+.stage-tip { min-width: 160px; }
+.stage-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  padding: 1px 0;
+}
+.stage-tip-row b { color: var(--gold); font-family: var(--mono); font-weight: 600; }
 
 @media (max-width: 720px) {
   .top { flex-direction: column; align-items: stretch; gap: 10px; }

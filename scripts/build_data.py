@@ -376,8 +376,11 @@ def pack_materials(
     stages: dict[str, Any],
 ) -> dict[str, Any]:
     """Material metadata for the leveling calculator: name/icon plus how to get it
-    (farm stages with Penguin Stats CN expected-AP-per-item, or a workshop recipe)."""
+    (farm stages with Penguin Stats CN expected-AP-per-item, or a workshop recipe).
+    Also returns a stageId -> [{id, qty}] reverse index (every needed material each
+    stage drops, at its own per-run expected quantity) for the stage-hover tooltip."""
     out: dict[str, Any] = {}
+    stage_drops: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for iid in ids:
         info = items_cn.get(iid)
         if not info:
@@ -419,6 +422,7 @@ def pack_materials(
                     "occPer": occ_by_stage.get(row["stageId"]),
                 }
             )
+            stage_drops[row["stageId"]].append({"id": iid, "qty": round(qty / times, 3)})
         drops.sort(key=lambda d: d["apPerItem"])
 
         out[iid] = {
@@ -429,7 +433,9 @@ def pack_materials(
             "craft": craft,
             "drops": drops[:8],
         }
-    return out
+    for sid, items in stage_drops.items():
+        items.sort(key=lambda d: -d["qty"])
+    return out, dict(stage_drops)
 
 
 def pack_potentials(ranks: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -702,6 +708,8 @@ def build() -> dict[str, Any]:
         if iid in needed_material_ids:
             matrix_by_item[iid].append(row)
 
+    materials_out, stage_drops = pack_materials(needed_material_ids, item_cn, item_tw, workshop_formulas, matrix_by_item, stages)
+
     return {
         "professions": PROFESSIONS,
         "ranges": range_out,
@@ -709,7 +717,8 @@ def build() -> dict[str, Any]:
         "operators": operators,
         "skills": used_skills,
         "terms": pack_terms(),
-        "materials": pack_materials(needed_material_ids, item_cn, item_tw, workshop_formulas, matrix_by_item, stages),
+        "materials": materials_out,
+        "stageDrops": stage_drops,
         "levelTable": {"expByPhase": exp_by_phase, "lmdByPhase": lmd_by_phase},
         "expItems": exp_items,
     }

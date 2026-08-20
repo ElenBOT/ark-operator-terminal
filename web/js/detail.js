@@ -15,7 +15,7 @@ import {
   stars,
   withDps,
 } from "./shared.js";
-import { planMaterials } from "./materials.js";
+import { planFarmStrategy, planMaterials } from "./materials.js";
 
 const SKILL_TYPE = { MANUAL: "手動觸發", AUTO: "自動觸發", PASSIVE: "被動" };
 const SP_TYPE = {
@@ -31,6 +31,9 @@ const SP_TYPE = {
 const BASIC_SKILL = -1;
 let termDict = {};
 let tipEl = null;
+let materialsRef = {};
+let stageDropsRef = {};
+let stageTipEl = null;
 
 export function createDetailState(op) {
   const maxElite = op.maxElite ?? op.phases.length - 1;
@@ -56,6 +59,7 @@ export function createDetailState(op) {
     // Both default to the same (max) snapshot, so the material list starts empty.
     matPlan: { current: maxSnapshot(), target: maxSnapshot() },
     selectedMaterial: null,
+    showingPlan: false,
   };
 }
 
@@ -179,7 +183,10 @@ export function activeTalents(op, elite, potential) {
 
 export function renderOperator(app, data, op, detail, handlers) {
   if (data.terms) termDict = data.terms;
+  if (data.materials) materialsRef = data.materials;
+  if (data.stageDrops) stageDropsRef = data.stageDrops;
   ensureTermTips();
+  ensureStageTips();
   const branch = branchOf(data, op.branchId);
   const wrap = document.createElement("div");
   wrap.className = "dossier";
@@ -246,7 +253,7 @@ export function renderOperator(app, data, op, detail, handlers) {
   body.append(left, right);
 
   wrap.append(head, body);
-  app.replaceChildren(wrap, materialsDock());
+  app.replaceChildren(wrap, materialsDock(data, op, detail));
   syncDetail(app, data, op, detail);
 }
 
@@ -350,7 +357,7 @@ function planBar(handlers) {
   return row;
 }
 
-function materialsDock() {
+function materialsDock(data, op, detail) {
   const box = document.createElement("aside");
   box.className = "mat-dock";
   box.dataset.slot = "mat-dock";
@@ -372,6 +379,24 @@ function materialsDock() {
   const summary = document.createElement("div");
   summary.className = "mat-dock-summary";
   summary.dataset.slot = "mat-summary";
+  const actions = document.createElement("div");
+  actions.className = "mat-dock-actions";
+  const planBtn = document.createElement("button");
+  planBtn.type = "button";
+  planBtn.className = "mat-plan-btn";
+  planBtn.dataset.slot = "mat-plan-btn";
+  planBtn.textContent = "刷圖計畫";
+  planBtn.title = "依目前需要的材料，建議去哪些關卡刷、哪些材料改用合成（不算龍門幣與經驗）";
+  planBtn.addEventListener("click", () => {
+    detail.showingPlan = true;
+    detail.selectedMaterial = null;
+    if (!box.classList.contains("expanded")) {
+      box.classList.add("expanded");
+      handle.textContent = "›";
+    }
+    syncMaterialsDock(box, data, op, detail);
+  });
+  actions.appendChild(planBtn);
   const list = document.createElement("div");
   list.className = "mat-dock-list";
   list.dataset.slot = "mat-list";
@@ -385,7 +410,7 @@ function materialsDock() {
   detailBody.className = "mat-detail-body";
   detailBody.dataset.slot = "mat-detail-body";
   detailPanel.append(detailTitle, detailBody);
-  box.append(head, summary, list, detailPanel);
+  box.append(head, summary, actions, list, detailPanel);
   return box;
 }
 
@@ -420,16 +445,19 @@ function syncMaterialsDock(root, data, op, detail) {
   const ids = Object.keys(counts);
   if (!ids.length) {
     list.appendChild(matEmpty("當前與目標相同，不需要材料。按「編輯當前」或「編輯目標」調整左側面板來設定兩者。"));
-    if (detail.selectedMaterial) {
-      detail.selectedMaterial = null;
-      renderMaterialDetail(root, data, null);
-    }
+    detail.selectedMaterial = null;
+    detail.showingPlan = false;
+    renderMaterialDetail(root, data, null);
     return;
   }
   if (detail.selectedMaterial && !(detail.selectedMaterial in counts)) detail.selectedMaterial = null;
   ids.sort((a, b) => (data.materials[b]?.rarity || 0) - (data.materials[a]?.rarity || 0));
   for (const id of ids) list.appendChild(materialChip(root, data, detail, id, counts[id]));
-  renderMaterialDetail(root, data, detail.selectedMaterial);
+  if (detail.showingPlan) {
+    renderFarmPlan(root, data, counts);
+  } else {
+    renderMaterialDetail(root, data, detail.selectedMaterial);
+  }
 }
 
 function formatCount(n) {
@@ -455,6 +483,7 @@ function materialChip(root, data, detail, id, count) {
   btn.append(label, n);
   btn.addEventListener("click", () => {
     detail.selectedMaterial = detail.selectedMaterial === id ? null : id;
+    detail.showingPlan = false;
     root.querySelectorAll(".mat-chip.open").forEach((el) => el.classList.remove("open"));
     if (detail.selectedMaterial) btn.classList.add("open");
     renderMaterialDetail(root, data, detail.selectedMaterial);
@@ -487,6 +516,59 @@ function renderMaterialDetail(root, data, id) {
   bodyEl.innerHTML = materialDetailHtml(data, info);
 }
 
+function renderFarmPlan(root, data, counts) {
+  const titleEl = root.querySelector('[data-slot="mat-detail-title"]');
+  const bodyEl = root.querySelector('[data-slot="mat-detail-body"]');
+  if (!titleEl || !bodyEl) return;
+  titleEl.textContent = "刷圖計畫";
+  titleEl.classList.remove("muted");
+  bodyEl.innerHTML = renderFarmPlanHtml(data, planFarmStrategy(data, counts));
+}
+
+function renderFarmPlanHtml(data, plan) {
+  const parts = [];
+  if (plan.craftSteps.length) {
+    const rows = plan.craftSteps
+      .map((c) => {
+        const mat = data.materials[c.id];
+        const ingredients = (c.costs || [])
+          .map((ic) => `${esc(data.materials[ic.id]?.name || ic.id)} ×${ic.count * c.times}`)
+          .join("、");
+        return `<div class="plan-craft-row"><b>${esc(mat?.name || c.id)}</b> 合成 ${c.times} 次（每次出 ${c.perOutput} 個）：消耗 ${ingredients}</div>`;
+      })
+      .join("");
+    parts.push(`<div class="plan-section"><div class="plan-section-h">建議合成</div>${rows}</div>`);
+  }
+  if (plan.stages.length) {
+    const rows = plan.stages
+      .map(
+        (s) => `
+      <tr data-stage="${esc(s.stageId)}">
+        <td>${esc(s.code)}</td>
+        <td class="num">${s.runs}</td>
+        <td class="num">${s.sanity}</td>
+        <td>${s.covers.map((c) => `${esc(data.materials[c.id]?.name || c.id)} +${c.gained}`).join("、")}</td>
+      </tr>`
+      )
+      .join("");
+    const totalSanity = plan.stages.reduce((sum, s) => sum + s.sanity, 0);
+    parts.push(`
+      <div class="plan-section">
+        <div class="plan-section-h">建議刷關（共 ${totalSanity} 理智）</div>
+        <table class="plan-stage-table">
+          <thead><tr><th>關卡</th><th>次數</th><th>理智</th><th>預期獲得</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`);
+  }
+  if (plan.unresolved.length) {
+    const names = plan.unresolved.map((u) => `${esc(data.materials[u.id]?.name || u.id)} ×${Math.ceil(u.count)}`).join("、");
+    parts.push(`<p class="plan-unresolved">沒有已知取得方式，無法排進計畫：${names}</p>`);
+  }
+  if (!parts.length) parts.push(`<p class="muted">目前不需要額外刷材料。</p>`);
+  return parts.join("");
+}
+
 const OCC_PER = {
   ALWAYS: { label: "固定掉落", cls: "occ-always" },
   ALMOST: { label: "常見掉落", cls: "occ-almost" },
@@ -504,7 +586,7 @@ function materialDetailHtml(data, info) {
         const occ = OCC_PER[d.occPer];
         const occHtml = occ ? `<span class="occ-tag ${occ.cls}">${occ.label}</span>` : `<span class="muted">—</span>`;
         return `
-      <tr class="${i === 0 ? "best" : ""}">
+      <tr class="${i === 0 ? "best" : ""}" data-stage="${esc(d.stageId)}">
         <td>${esc(d.code)}</td>
         <td>${occHtml}</td>
         <td class="num">${d.apCost}</td>
@@ -860,28 +942,75 @@ function ensureTermTips() {
   window.addEventListener("resize", hideTermTip);
 }
 
-function showTermTip(el) {
-  const term = termDict[el.dataset.term];
-  if (!term || !tipEl) return;
-  tipEl.innerHTML = `<b>${esc(term.name)}</b><p>${esc(term.desc)}</p>`;
-  tipEl.hidden = false;
-  const rect = el.getBoundingClientRect();
+function positionTip(el, anchor) {
+  el.hidden = false;
+  const rect = anchor.getBoundingClientRect();
   const pad = 8;
-  const width = tipEl.offsetWidth;
-  const height = tipEl.offsetHeight;
+  const width = el.offsetWidth;
+  const height = el.offsetHeight;
   let left = rect.left;
   let top = rect.bottom + 8;
   if (left + width > window.innerWidth - pad) left = window.innerWidth - width - pad;
   if (left < pad) left = pad;
   if (top + height > window.innerHeight - pad) top = rect.top - height - 8;
   if (top < pad) top = pad;
-  tipEl.style.left = `${left}px`;
-  tipEl.style.top = `${top}px`;
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+
+function showTermTip(el) {
+  const term = termDict[el.dataset.term];
+  if (!term || !tipEl) return;
+  tipEl.innerHTML = `<b>${esc(term.name)}</b><p>${esc(term.desc)}</p>`;
+  positionTip(tipEl, el);
 }
 
 function hideTermTip() {
   if (!tipEl) return;
   tipEl.hidden = true;
+}
+
+function ensureStageTips() {
+  if (stageTipEl) return;
+  stageTipEl = document.createElement("div");
+  stageTipEl.className = "term-tip stage-tip";
+  stageTipEl.hidden = true;
+  stageTipEl.setAttribute("role", "tooltip");
+  document.body.appendChild(stageTipEl);
+  document.addEventListener("pointerover", (ev) => {
+    const el = ev.target.closest?.("tr[data-stage]");
+    if (el) showStageTip(el);
+  });
+  document.addEventListener("pointerout", (ev) => {
+    const el = ev.target.closest?.("tr[data-stage]");
+    if (!el) return;
+    const next = ev.relatedTarget;
+    if (next && (el.contains(next) || stageTipEl.contains(next))) return;
+    hideStageTip();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") hideStageTip();
+  });
+  window.addEventListener("scroll", hideStageTip, true);
+  window.addEventListener("resize", hideStageTip);
+}
+
+// Every item this stage drops (within our ~92-material universe), at its own
+// per-run expected quantity — not just whichever material's table we clicked into.
+function showStageTip(el) {
+  const stageId = el.dataset.stage;
+  const items = stageDropsRef[stageId] || [];
+  if (!items.length || !stageTipEl) return;
+  const rows = items
+    .map((d) => `<div class="stage-tip-row"><span>${esc(materialsRef[d.id]?.name || d.id)}</span><b>${d.qty}/次</b></div>`)
+    .join("");
+  stageTipEl.innerHTML = `<b>本關掉落（單次期望值）</b>${rows}`;
+  positionTip(stageTipEl, el);
+}
+
+function hideStageTip() {
+  if (!stageTipEl) return;
+  stageTipEl.hidden = true;
 }
 
 function currentSkillLevel(data, op, detail) {
